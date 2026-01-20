@@ -86,3 +86,7 @@ try {
     }
 }
 ```
+
+---
+
+추가 학습 자료: https://helloworld.kurly.com/blog/distributed-redisson-lock/
