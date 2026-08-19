@@ -1,0 +1,67 @@
+import { useState } from 'react'
+import { BookOpenText, Braces, Menu, Search, X } from 'lucide-react'
+import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Sidebar } from './components/Sidebar'
+import { DocumentListPage } from './pages/DocumentListPage'
+import { DocumentPage } from './pages/DocumentPage'
+
+export default function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  return (
+    <div className="app-shell">
+      <header className="mobile-header">
+        <Link to="/notes" className="mobile-brand" onClick={() => setSidebarOpen(false)}>
+          <span className="brand-mark"><Braces size={18} /></span>
+          <span>Kernel</span>
+        </Link>
+        <button
+          className="icon-button"
+          type="button"
+          aria-label={sidebarOpen ? '메뉴 닫기' : '메뉴 열기'}
+          onClick={() => setSidebarOpen((open) => !open)}
+        >
+          {sidebarOpen ? <X size={21} /> : <Menu size={21} />}
+        </button>
+      </header>
+
+      <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+        <div className="brand-block">
+          <Link to="/notes" className="brand" onClick={() => setSidebarOpen(false)}>
+            <span className="brand-mark"><Braces size={20} /></span>
+            <span>
+              <strong>Kernel</strong>
+              <small>BACKEND CS NOTES</small>
+            </span>
+          </Link>
+          <p>흩어진 지식을 연결하고,<br />나만의 언어로 정리합니다.</p>
+        </div>
+
+        <Sidebar onNavigate={() => setSidebarOpen(false)} />
+
+        <div className="sidebar-footer">
+          <div className="sidebar-footer__icon"><BookOpenText size={17} /></div>
+          <div>
+            <span>Knowledge base</span>
+            <small>Markdown powered</small>
+          </div>
+        </div>
+      </aside>
+
+      {sidebarOpen && <button className="sidebar-backdrop" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)} />}
+
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<Navigate to="/notes" replace />} />
+          <Route path="/notes" element={<DocumentListPage />} />
+          <Route path="/notes/:documentId" element={<DocumentPage />} />
+          <Route path="*" element={<Navigate to="/notes" replace />} />
+        </Routes>
+      </main>
+
+      <div className="keyboard-hint" aria-hidden="true">
+        <Search size={13} /> <span>문서 검색</span><kbd>/</kbd>
+      </div>
+    </div>
+  )
+}
