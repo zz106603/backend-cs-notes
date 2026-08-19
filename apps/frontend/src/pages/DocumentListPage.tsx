@@ -88,6 +88,11 @@ export function DocumentListPage() {
               <div className="document-card__icon"><FileText size={21} /></div>
               <h3>{document.title}</h3>
               <p>{document.path}</p>
+              {document.tags.length > 0 && (
+                <div className="tag-list tag-list--card">
+                  {document.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}>#{tag}</span>)}
+                </div>
+              )}
               <footer>
                 <span>{document.category}</span>
                 <time dateTime={document.updatedAt}>{formatDate(document.updatedAt)}</time>

@@ -173,10 +173,14 @@ kbd { padding: 2px 7px; border: 1px solid #d8dad4; border-radius: 5px; backgroun
 .editor-heading h1 { margin: 13px 0 8px; font-family: 'Newsreader', serif; font-size: clamp(34px, 4vw, 48px); letter-spacing: -.03em; }
 .editor-heading p { margin: 0; color: var(--muted); font-size: 12px; }
 .editor-metadata { margin-bottom: 18px; display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.editor-metadata__tags { grid-column: 1 / -1; }
 .editor-metadata label { padding: 12px 15px 13px; display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
 .editor-metadata label > span { font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: .12em; color: #8c918a; }
 .editor-metadata input { width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 13px; }
 .editor-error { margin: 12px 0; padding: 11px 14px; border: 1px solid #e2c3bf; border-radius: 8px; background: #fbefed; color: #93443b; font-size: 11px; }
+.tag-list { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-list--card { margin: -8px 0 15px; }
+.tag-chip { padding: 4px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 9px; font-weight: 600; }
 .editor-workspace { overflow: hidden; border: 1px solid #d8dad3; border-radius: 12px; background: var(--panel); box-shadow: 0 12px 35px rgba(41,50,42,.06); }
 .editor-toolbar { min-height: 48px; padding: 0 12px 0 17px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e0e1db; background: #f0f1ec; }
 .editor-toolbar > div:first-child { min-width: 0; display: flex; align-items: center; gap: 8px; }

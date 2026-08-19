@@ -71,6 +71,11 @@ export function DocumentPage() {
             <span><FolderOpen size={15} /> {document.path}</span>
             <span><CalendarDays size={15} /> {formatDate(document.updatedAt)} 수정</span>
           </div>
+          {document.tags.length > 0 && (
+            <div className="tag-list" aria-label="문서 태그">
+              {document.tags.map((tag) => <span className="tag-chip" key={tag}>#{tag}</span>)}
+            </div>
+          )}
         </header>
 
         <div className="document-divider"><span /></div>

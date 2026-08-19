@@ -3,7 +3,6 @@ package com.csnotes.document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -90,7 +89,7 @@ public class DocumentService {
         }
 
         try {
-            String content = Files.readString(target, StandardCharsets.UTF_8);
+            String content = MarkdownFrontMatter.parse(Files.readString(target, StandardCharsets.UTF_8)).body();
             return Optional.of(metadata.toDetail(content));
         } catch (IOException exception) {
             throw new DocumentReadException("문서를 읽는 중 오류가 발생했습니다: " + metadata.relativePath(), exception);
@@ -106,7 +105,8 @@ public class DocumentService {
                 throw new DocumentConflictException("같은 카테고리에 동일한 이름의 문서가 이미 있습니다.");
             }
 
-            String content = withTitleHeading(title, request.content());
+            List<String> tags = normalizeTags(request.tags());
+            String content = withFrontMatter(title, tags, request.content());
             try {
                 Files.createDirectories(target.getParent());
                 ensureRealParentInsideRoot(target);
@@ -153,7 +153,8 @@ public class DocumentService {
                     moveWithoutReplacing(source, target);
                 }
 
-                String content = withTitleHeading(title, request.content());
+                List<String> tags = normalizeTags(request.tags());
+                String content = withFrontMatter(title, tags, request.content());
                 writeAtomically(target, content);
                 rebuildAfterMutation();
                 return detailForPath(target, content);
@@ -343,6 +344,20 @@ public class DocumentService {
                 : ensureTrailingNewline("# " + title + "\n\n" + normalizedContent);
     }
 
+    private String withFrontMatter(String title, List<String> tags, String content) {
+        String body = MarkdownFrontMatter.parse(content).body();
+        return MarkdownFrontMatter.render(title, tags, withTitleHeading(title, body));
+    }
+
+    private List<String> normalizeTags(List<String> tags) {
+        if (tags == null) return List.of();
+        List<String> normalized = tags.stream().map(String::trim).filter(tag -> !tag.isBlank()).distinct().toList();
+        if (normalized.size() > 10 || normalized.stream().anyMatch(tag -> tag.length() > 30)) {
+            throw new InvalidDocumentPathException("태그는 최대 10개, 각 30자까지 입력할 수 있습니다.");
+        }
+        return normalized;
+    }
+
     private String ensureTrailingNewline(String content) {
         return content.endsWith("\n") ? content : content + "\n";
     }
@@ -381,7 +396,7 @@ public class DocumentService {
         if (metadata == null) {
             throw new DocumentReadException("저장한 문서를 인덱스에서 찾을 수 없습니다.");
         }
-        return metadata.toDetail(content);
+        return metadata.toDetail(MarkdownFrontMatter.parse(content).body());
     }
 
     private DocumentIndex currentIndex() {
@@ -504,13 +519,17 @@ public class DocumentService {
                 return cached;
             }
 
+            String source = Files.readString(path, StandardCharsets.UTF_8);
+            MarkdownFrontMatter.Parsed frontMatter = MarkdownFrontMatter.parse(source);
             String fallbackTitle = path.getFileName().toString().replaceFirst("(?i)\\.md$", "");
-            String title = readTitle(path).orElse(fallbackTitle);
+            String title = Optional.ofNullable(frontMatter.title()).filter(value -> !value.isBlank())
+                    .or(() -> readTitle(frontMatter.body())).orElse(fallbackTitle);
             String category = relativePath.substring(0, relativePath.lastIndexOf('/'));
             String id = encodeId(relativePath);
 
             return new DocumentMetadata(
-                    id, title, category, relativePath, normalize(title), normalize(relativePath), updatedAt, size
+                    id, title, category, relativePath, normalize(title), normalize(relativePath),
+                    frontMatter.tags(), updatedAt, size
             );
         } catch (IOException exception) {
             throw new DocumentReadException("문서 메타데이터를 읽는 중 오류가 발생했습니다: " + path, exception);
@@ -518,16 +537,14 @@ public class DocumentService {
     }
 
     private Optional<String> readTitle(Path path) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("# ") && !trimmed.substring(2).isBlank()) {
-                    return Optional.of(trimmed.substring(2).trim());
-                }
-            }
-            return Optional.empty();
-        }
+        MarkdownFrontMatter.Parsed parsed = MarkdownFrontMatter.parse(Files.readString(path, StandardCharsets.UTF_8));
+        return Optional.ofNullable(parsed.title()).filter(value -> !value.isBlank()).or(() -> readTitle(parsed.body()));
+    }
+
+    private Optional<String> readTitle(String content) {
+        return content.lines().map(String::trim)
+                .filter(line -> line.startsWith("# ") && !line.substring(2).isBlank())
+                .map(line -> line.substring(2).trim()).findFirst();
     }
 
     private String toRelativePath(Path path) {
@@ -612,15 +629,16 @@ public class DocumentService {
             String relativePath,
             String normalizedTitle,
             String normalizedPath,
+            List<String> tags,
             Instant updatedAt,
             long size
     ) {
         private DocumentModels.DocumentSummaryResponse toSummary() {
-            return new DocumentModels.DocumentSummaryResponse(id, title, category, relativePath, updatedAt);
+            return new DocumentModels.DocumentSummaryResponse(id, title, category, relativePath, updatedAt, tags);
         }
 
         private DocumentModels.DocumentDetailResponse toDetail(String content) {
-            return new DocumentModels.DocumentDetailResponse(id, title, category, relativePath, content, updatedAt);
+            return new DocumentModels.DocumentDetailResponse(id, title, category, relativePath, content, updatedAt, tags);
         }
     }
 }
