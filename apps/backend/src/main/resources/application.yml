@@ -37,3 +37,9 @@ rag:
     model: ${RAG_EMBEDDING_MODEL:text-embedding-3-small}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1536}
     batch-size: ${RAG_EMBEDDING_BATCH_SIZE:64}
+  indexing:
+    enabled: ${RAG_INDEXING_ENABLED:false}
+    chunk-max-characters: ${RAG_CHUNK_MAX_CHARACTERS:2000}
+    max-documents: ${RAG_INDEXING_MAX_DOCUMENTS:200}
+    max-chunks-per-document: ${RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT:200}
+    max-characters-per-run: ${RAG_INDEXING_MAX_CHARACTERS_PER_RUN:500000}

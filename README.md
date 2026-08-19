@@ -62,6 +62,40 @@ $env:OPENAI_API_KEY = "발급받은 API 키"
 
 라이브 테스트는 짧은 문장 하나를 임베딩하고 1536차원 벡터가 반환되는지 확인하므로 실제 API 비용이 소량 발생합니다. `OPENAI_API_KEY`가 없으면 태스크를 건너뛰며, 일반 `:apps:backend:test`에서는 `openai-live` 태그를 항상 제외합니다.
 
+### 문서를 pgvector에 색인
+
+M4.5 색인은 기본적으로 비활성화되어 있습니다. PostgreSQL을 시작하고 아래 환경 변수를 설정한 터미널에서 백엔드를 실행합니다.
+
+```powershell
+docker compose up -d postgres
+$env:OPENAI_API_KEY = "발급받은 API 키"
+$env:RAG_PERSISTENCE_ENABLED = "true"
+$env:RAG_INDEXING_ENABLED = "true"
+./gradlew.bat :apps:backend:bootRun
+```
+
+먼저 비용이 발생하지 않는 미리보기를 실행합니다. `embeddedChunkCount`와 `embeddingCharacterCount`가 실제 OpenAI 전송 예상량입니다.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index"
+```
+
+예상량을 확인한 뒤에만 실제 색인을 명시적으로 실행합니다.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index?dryRun=false"
+```
+
+기존 문서의 같은 본문 해시와 모델로 저장된 벡터는 재사용하고 새 청크만 OpenAI에 요청합니다. 기본 방어 한도는 문서 200개, 문서당 청크 200개, 실행당 신규 임베딩 입력 500,000자이며 각각 `RAG_INDEXING_MAX_DOCUMENTS`, `RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT`, `RAG_INDEXING_MAX_CHARACTERS_PER_RUN`으로 더 낮출 수 있습니다. 한도를 넘으면 OpenAI 호출 전에 요청을 중단하고, 동시에 두 색인을 실행하는 것도 차단합니다.
+
+저장 결과는 Docker의 PostgreSQL 안 `document_chunk` 테이블에서 확인할 수 있습니다.
+
+```powershell
+docker compose exec postgres psql -U cs_notes -d cs_notes -c "SELECT document_title, count(*) AS chunks, embedding_model, max(indexed_at) AS indexed_at FROM document_chunk GROUP BY document_title, embedding_model ORDER BY document_title;"
+```
+
+IntelliJ Database 또는 DBeaver에서는 `localhost:5432`, 데이터베이스·사용자·비밀번호 `cs_notes`로 연결한 뒤 `public.document_chunk` 테이블을 열면 됩니다. 실제 벡터는 `embedding` 열에 저장됩니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)
