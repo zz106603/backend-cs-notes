@@ -39,7 +39,20 @@ tasks.withType<Test> {
 
 tasks.named<Test>("test") {
     useJUnitPlatform {
-        excludeTags("openai-live")
+        excludeTags("openai-live", "rag-search-live")
+    }
+}
+
+tasks.register<Test>("ragSearchLiveTest") {
+    description = "실제 OpenAI 질의 임베딩과 로컬 pgvector 유사도 검색을 확인합니다."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("rag-search-live")
+    }
+    onlyIf("OPENAI_API_KEY 환경 변수와 실행 중인 로컬 PostgreSQL이 필요합니다.") {
+        !System.getenv("OPENAI_API_KEY").isNullOrBlank()
     }
 }
 

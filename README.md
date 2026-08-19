@@ -96,6 +96,40 @@ docker compose exec postgres psql -U cs_notes -d cs_notes -c "SELECT document_ti
 
 IntelliJ Database 또는 DBeaver에서는 `localhost:5432`, 데이터베이스·사용자·비밀번호 `cs_notes`로 연결한 뒤 `public.document_chunk` 테이블을 열면 됩니다. 실제 벡터는 `embedding` 열에 저장됩니다.
 
+### pgvector 의미 검색 확인
+
+M4.6 검색 API를 사용하려면 색인을 완료한 뒤 백엔드 실행 환경에 검색 기능을 추가로 활성화합니다.
+
+```powershell
+$env:RAG_SEARCH_ENABLED = "true"
+./gradlew.bat :apps:backend:bootRun
+```
+
+검색 요청 한 번마다 검색어 임베딩이 필요하므로 유료 호출임을 드러내기 위해 POST API로 제공합니다.
+
+```powershell
+$body = @{
+  query = "Spring 트랜잭션 전파는 어떻게 동작하나요?"
+  limit = 5
+  minimumScore = 0.5
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8080/api/rag/search" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+결과의 `score`는 pgvector cosine 유사도이며 높을수록 질의와 가까운 Chunk입니다. `documentPath`, `sectionPath`, `content`를 함께 비교해 상위 결과가 실제 질문 의도와 맞는지 확인합니다. 같은 서버 프로세스에서 같은 검색어를 10분 안에 다시 요청하면 질의 벡터를 캐시하며 응답의 `cachedQueryEmbedding`이 `true`가 됩니다.
+
+이미 색인된 로컬 DB를 대상으로 OpenAI 질의 임베딩부터 pgvector 정렬까지 한 번에 확인하려면 다음 라이브 테스트를 사용할 수 있습니다. 실제 API 비용이 소량 발생하며 PostgreSQL 컨테이너가 실행 중이어야 합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+docker compose up -d postgres
+./gradlew.bat :apps:backend:ragSearchLiveTest
+```
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)

@@ -91,7 +91,7 @@ public class PgVectorChunkStore implements ChunkVectorStore {
         ));
     }
 
-    /** cosine distance를 0~1 유사도 점수로 바꿔 높은 순서대로 반환한다. */
+    /** cosine distance를 cosine 유사도(-1~1)로 바꿔 높은 순서대로 반환한다. */
     @Override
     public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) {
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("Search limit must be between 1 and 100");

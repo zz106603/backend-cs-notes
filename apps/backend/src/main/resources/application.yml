@@ -43,3 +43,11 @@ rag:
     max-documents: ${RAG_INDEXING_MAX_DOCUMENTS:200}
     max-chunks-per-document: ${RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT:200}
     max-characters-per-run: ${RAG_INDEXING_MAX_CHARACTERS_PER_RUN:500000}
+  search:
+    enabled: ${RAG_SEARCH_ENABLED:false}
+    default-limit: ${RAG_SEARCH_DEFAULT_LIMIT:5}
+    max-limit: ${RAG_SEARCH_MAX_LIMIT:20}
+    max-query-characters: ${RAG_SEARCH_MAX_QUERY_CHARACTERS:500}
+    default-minimum-score: ${RAG_SEARCH_DEFAULT_MINIMUM_SCORE:0.5}
+    query-cache-ttl: ${RAG_SEARCH_QUERY_CACHE_TTL:10m}
+    query-cache-max-entries: ${RAG_SEARCH_QUERY_CACHE_MAX_ENTRIES:100}
