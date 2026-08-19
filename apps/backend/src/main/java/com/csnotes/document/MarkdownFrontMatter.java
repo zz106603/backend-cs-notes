@@ -3,10 +3,12 @@ package com.csnotes.document;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Markdown 본문과 검색 메타데이터(title, tags)를 분리하고 다시 직렬화한다. */
 final class MarkdownFrontMatter {
     private MarkdownFrontMatter() {
     }
 
+    /** front matter가 없는 기존 문서는 전체 원문을 본문으로 반환한다. */
     static Parsed parse(String source) {
         String normalized = source == null ? "" : source.replace("\r\n", "\n");
         if (!normalized.startsWith("---\n")) return new Parsed(null, List.of(), normalized);

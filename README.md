@@ -30,6 +30,16 @@ npm run dev
 
 브라우저에서 `http://localhost:5173`을 열면 됩니다. 개발 서버는 `/api` 요청을 로컬 백엔드로 전달합니다.
 
+### RAG용 PostgreSQL 실행
+
+pgvector 저장소는 기본적으로 비활성화되어 있어 기존 문서 기능은 DB 없이 실행됩니다. 로컬 DB를 시작하려면 저장소 루트에서 다음을 실행합니다.
+
+```bash
+docker compose up -d postgres
+```
+
+백엔드 실행 환경에 `RAG_PERSISTENCE_ENABLED=true`를 지정하면 Flyway가 Chunk 및 1536차원 임베딩 테이블을 생성합니다. 접속 정보는 `RAG_DATABASE_URL`, `RAG_DATABASE_USERNAME`, `RAG_DATABASE_PASSWORD`로 변경할 수 있습니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)

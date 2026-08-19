@@ -32,14 +32,14 @@ class DocumentServiceTest {
     }
 
     @Test
-    void returnsCategoriesWithDocumentCounts() {
+    void 문서_개수와_함께_카테고리를_반환한다() {
         assertThat(documentService.findCategories())
                 .extracting(DocumentModels.CategoryResponse::name)
                 .containsExactly("네트워크", "데이터베이스");
     }
 
     @Test
-    void filtersDocumentsByCategoryAndQuery() {
+    void 카테고리와_검색어로_문서를_필터링한다() {
         var documents = documentService.findDocuments("데이터베이스", "격리");
 
         assertThat(documents).hasSize(1);
@@ -47,7 +47,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void readsDocumentByOpaqueId() {
+    void 불투명_아이디로_문서를_조회한다() {
         var summary = documentService.findDocuments("네트워크", null).getFirst();
         var document = documentService.findDocument(summary.id());
 
@@ -57,13 +57,13 @@ class DocumentServiceTest {
     }
 
     @Test
-    void rejectsInvalidDocumentId() {
+    void 올바르지_않은_문서_아이디를_거부한다() {
         assertThat(documentService.findDocument("not-valid-base64!"))
                 .isEmpty();
     }
 
     @Test
-    void keepsCachedIndexUntilExplicitRefresh() throws IOException {
+    void 명시적으로_갱신할_때까지_캐시된_인덱스를_유지한다() throws IOException {
         assertThat(documentService.findDocuments(null, null)).hasSize(2);
 
         Files.createDirectories(documentRoot.resolve("운영체제"));
@@ -79,7 +79,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void refreshesChangedMetadataWithoutChangingDocumentId() throws IOException {
+    void 문서_아이디를_유지하면서_변경된_메타데이터를_갱신한다() throws IOException {
         var before = documentService.findDocuments("데이터베이스", null).getFirst();
         Path target = documentRoot.resolve("데이터베이스/트랜잭션.md");
         Files.writeString(target, "# ACID 트랜잭션\n\n변경된 본문입니다.", StandardCharsets.UTF_8);
@@ -94,7 +94,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void createsDocumentAndAddsTitleHeading() {
+    void 문서를_생성하고_제목_헤딩을_추가한다() {
         var created = documentService.createDocument(new DocumentModels.CreateDocumentRequest(
                 "인덱스", "데이터베이스", "B-Tree를 정리합니다.", java.util.List.of("DB", "B-Tree")
         ));
@@ -108,7 +108,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void readsFrontMatterTitleAndTagsWithoutExposingItAsContent() throws IOException {
+    void 프론트_매터의_제목과_태그를_본문에_노출하지_않고_읽는다() throws IOException {
         Files.writeString(documentRoot.resolve("네트워크/메타데이터.md"), """
                 ---
                 title: "HTTP 메타데이터"
@@ -131,7 +131,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void searchesBodyAndReturnsMatchingExcerpt() {
+    void 본문을_검색하고_일치하는_문맥을_반환한다() {
         var documents = documentService.findDocuments(null, "본문");
 
         assertThat(documents).hasSize(1);
@@ -140,7 +140,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void searchesTagsAndRanksExactTagAheadOfBodyMatch() throws IOException {
+    void 태그를_검색하고_정확한_태그_일치를_본문_일치보다_우선한다() throws IOException {
         Files.writeString(documentRoot.resolve("네트워크/태그.md"), """
                 ---
                 title: "네트워크 기초"
@@ -162,7 +162,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void rejectsDuplicateAndUnsafeDocumentPaths() {
+    void 중복되거나_안전하지_않은_문서_경로를_거부한다() {
         assertThatThrownBy(() -> documentService.createDocument(new DocumentModels.CreateDocumentRequest(
                 "트랜잭션", "데이터베이스", "본문"
         ))).isInstanceOf(DocumentConflictException.class);
@@ -173,7 +173,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void updatesAndMovesDocumentWithNewStableResponse() {
+    void 문서를_수정하고_이동한_결과를_반환한다() {
         var before = documentService.findDocuments("데이터베이스", null).getFirst();
         var updated = documentService.updateDocument(before.id(), new DocumentModels.UpdateDocumentRequest(
                 "ACID", "백엔드", "# 이전 제목\n\n새 본문", before.updatedAt()
@@ -187,7 +187,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void rejectsUpdateWhenExpectedVersionIsStale() {
+    void 예상_버전이_오래되었으면_수정을_거부한다() {
         var before = documentService.findDocuments("데이터베이스", null).getFirst();
 
         assertThatThrownBy(() -> documentService.updateDocument(before.id(), new DocumentModels.UpdateDocumentRequest(
@@ -198,7 +198,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void movesDocumentToSeparateTrashAndHidesItFromDocuments() {
+    void 문서를_별도_휴지통으로_이동하고_목록에서_숨긴다() {
         var before = documentService.findDocuments("네트워크", null).getFirst();
 
         documentService.moveDocumentToTrash(before.id());
@@ -214,7 +214,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void permanentlyDeletesDocumentOnlyFromTrash() {
+    void 휴지통에_있는_문서만_영구_삭제한다() {
         var before = documentService.findDocuments("네트워크", null).getFirst();
         documentService.moveDocumentToTrash(before.id());
         var trashed = documentService.findTrashDocuments().getFirst();
@@ -228,7 +228,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void restoresTrashDocumentToOriginalPath() {
+    void 휴지통_문서를_원래_경로로_복원한다() {
         var before = documentService.findDocuments("네트워크", null).getFirst();
         documentService.moveDocumentToTrash(before.id());
         var trashed = documentService.findTrashDocuments().getFirst();
@@ -242,7 +242,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void rejectsRestoreWhenOriginalPathAlreadyExists() throws IOException {
+    void 원래_경로에_문서가_있으면_복원을_거부한다() throws IOException {
         var before = documentService.findDocuments("네트워크", null).getFirst();
         documentService.moveDocumentToTrash(before.id());
         var trashed = documentService.findTrashDocuments().getFirst();
@@ -255,7 +255,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void buildsNestedCategoryTreeAndFiltersDescendants() throws IOException {
+    void 중첩_카테고리_트리를_만들고_하위_문서를_필터링한다() throws IOException {
         Files.createDirectories(documentRoot.resolve("백엔드/Spring"));
         Files.createDirectories(documentRoot.resolve("백엔드/보안"));
         Files.writeString(documentRoot.resolve("백엔드/Spring/DI.md"), "# 의존성 주입", StandardCharsets.UTF_8);
