@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, CalendarDays, FileText, FolderOpen } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, CalendarDays, FileText, FolderOpen, Pencil, Trash2 } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
@@ -18,10 +18,22 @@ function formatDate(value: string) {
 
 export function DocumentPage() {
   const { documentId = '' } = useParams()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { data: document, isLoading, error } = useQuery({
     queryKey: ['document', documentId],
     queryFn: () => api.document(documentId),
     enabled: Boolean(documentId),
+  })
+  const trashMutation = useMutation({
+    mutationFn: () => api.moveDocumentToTrash(documentId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['documents'] }),
+        queryClient.invalidateQueries({ queryKey: ['categories'] }),
+      ])
+      navigate('/notes', { replace: true })
+    },
   })
 
   if (isLoading) return <div className="page page--document"><LoadingState /></div>
@@ -30,9 +42,26 @@ export function DocumentPage() {
 
   return (
     <div className="page page--document">
-      <Link to={`/notes?category=${encodeURIComponent(document.category)}`} className="back-link">
-        <ArrowLeft size={16} /> {document.category} 목록으로
-      </Link>
+      <div className="document-actions">
+        <Link to={`/notes?category=${encodeURIComponent(document.category)}`} className="back-link">
+          <ArrowLeft size={16} /> {document.category} 목록으로
+        </Link>
+        <div>
+          <Link to={`/notes/${document.id}/edit`} className="secondary-button"><Pencil size={15} /> 편집</Link>
+          <button
+            type="button"
+            className="secondary-button secondary-button--danger"
+            disabled={trashMutation.isPending}
+            onClick={() => {
+              if (window.confirm('이 문서를 휴지통으로 이동할까요?')) trashMutation.mutate()
+            }}
+          >
+            <Trash2 size={15} /> {trashMutation.isPending ? '이동 중...' : '휴지통'}
+          </button>
+        </div>
+      </div>
+
+      {trashMutation.error && <div className="editor-error" role="alert">{(trashMutation.error as Error).message}</div>}
 
       <article className="document-view">
         <header className="document-header">

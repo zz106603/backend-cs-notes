@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { BookOpenText, Braces, Menu, Search, X } from 'lucide-react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
-import { DocumentListPage } from './pages/DocumentListPage'
-import { DocumentPage } from './pages/DocumentPage'
+
+const DocumentListPage = lazy(() => import('./pages/DocumentListPage').then((module) => ({ default: module.DocumentListPage })))
+const DocumentPage = lazy(() => import('./pages/DocumentPage').then((module) => ({ default: module.DocumentPage })))
+const DocumentEditorPage = lazy(() => import('./pages/DocumentEditorPage').then((module) => ({ default: module.DocumentEditorPage })))
+const TrashPage = lazy(() => import('./pages/TrashPage').then((module) => ({ default: module.TrashPage })))
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -51,12 +54,17 @@ export default function App() {
       {sidebarOpen && <button className="sidebar-backdrop" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)} />}
 
       <main className="main-content">
-        <Routes>
-          <Route path="/" element={<Navigate to="/notes" replace />} />
-          <Route path="/notes" element={<DocumentListPage />} />
-          <Route path="/notes/:documentId" element={<DocumentPage />} />
-          <Route path="*" element={<Navigate to="/notes" replace />} />
-        </Routes>
+        <Suspense fallback={<div className="page"><div className="state-panel"><span className="loader" /><p>화면을 준비하는 중</p></div></div>}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/notes" replace />} />
+            <Route path="/notes" element={<DocumentListPage />} />
+            <Route path="/notes/new" element={<DocumentEditorPage />} />
+            <Route path="/notes/:documentId/edit" element={<DocumentEditorPage />} />
+            <Route path="/notes/:documentId" element={<DocumentPage />} />
+            <Route path="/trash" element={<TrashPage />} />
+            <Route path="*" element={<Navigate to="/notes" replace />} />
+          </Routes>
+        </Suspense>
       </main>
 
       <div className="keyboard-hint" aria-hidden="true">

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, FileText, Search, Sparkles } from 'lucide-react'
+import { ArrowUpRight, FilePlus2, FileText, Search, Sparkles } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
 import { ErrorState } from '../components/ErrorState'
@@ -60,7 +60,12 @@ export function DocumentListPage() {
             <span>COLLECTION</span>
             <h2>{debouncedQuery ? `'${debouncedQuery}' 검색 결과` : category ? `${category} 문서` : '전체 문서'}</h2>
           </div>
-          <p>{documents?.length ?? 0} notes</p>
+          <div className="section-actions">
+            <p>{documents?.length ?? 0} notes</p>
+            <Link to="/notes/new" className="primary-button primary-button--small">
+              <FilePlus2 size={15} /> 새 문서
+            </Link>
+          </div>
         </header>
 
         {isLoading && <LoadingState />}
