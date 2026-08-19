@@ -3,7 +3,6 @@ package com.csnotes.document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -68,13 +67,17 @@ public class DocumentService {
                 || document.category().equalsIgnoreCase(category.trim())
                 || document.category().toLowerCase(Locale.ROOT)
                 .startsWith(category.trim().toLowerCase(Locale.ROOT) + "/");
-        Predicate<DocumentMetadata> queryFilter = document -> normalizedQuery.isBlank()
-                || document.normalizedTitle().contains(normalizedQuery)
-                || document.normalizedPath().contains(normalizedQuery);
+        var documents = currentIndex().documents().stream().filter(categoryFilter);
+        if (normalizedQuery.isBlank()) {
+            return documents.map(document -> document.toSummary(null)).toList();
+        }
 
-        return currentIndex().documents().stream()
-                .filter(categoryFilter.and(queryFilter))
-                .map(DocumentMetadata::toSummary)
+        return documents
+                .map(document -> new SearchResult(document, searchScore(document, normalizedQuery)))
+                .filter(result -> result.score() > 0)
+                .sorted(Comparator.comparingInt(SearchResult::score).reversed()
+                        .thenComparing(result -> result.document().title(), String.CASE_INSENSITIVE_ORDER))
+                .map(result -> result.document().toSummary(buildExcerpt(result.document(), normalizedQuery)))
                 .toList();
     }
 
@@ -90,7 +93,7 @@ public class DocumentService {
         }
 
         try {
-            String content = Files.readString(target, StandardCharsets.UTF_8);
+            String content = MarkdownFrontMatter.parse(Files.readString(target, StandardCharsets.UTF_8)).body();
             return Optional.of(metadata.toDetail(content));
         } catch (IOException exception) {
             throw new DocumentReadException("문서를 읽는 중 오류가 발생했습니다: " + metadata.relativePath(), exception);
@@ -106,7 +109,8 @@ public class DocumentService {
                 throw new DocumentConflictException("같은 카테고리에 동일한 이름의 문서가 이미 있습니다.");
             }
 
-            String content = withTitleHeading(title, request.content());
+            List<String> tags = normalizeTags(request.tags());
+            String content = withFrontMatter(title, tags, request.content());
             try {
                 Files.createDirectories(target.getParent());
                 ensureRealParentInsideRoot(target);
@@ -153,7 +157,8 @@ public class DocumentService {
                     moveWithoutReplacing(source, target);
                 }
 
-                String content = withTitleHeading(title, request.content());
+                List<String> tags = normalizeTags(request.tags());
+                String content = withFrontMatter(title, tags, request.content());
                 writeAtomically(target, content);
                 rebuildAfterMutation();
                 return detailForPath(target, content);
@@ -343,6 +348,20 @@ public class DocumentService {
                 : ensureTrailingNewline("# " + title + "\n\n" + normalizedContent);
     }
 
+    private String withFrontMatter(String title, List<String> tags, String content) {
+        String body = MarkdownFrontMatter.parse(content).body();
+        return MarkdownFrontMatter.render(title, tags, withTitleHeading(title, body));
+    }
+
+    private List<String> normalizeTags(List<String> tags) {
+        if (tags == null) return List.of();
+        List<String> normalized = tags.stream().map(String::trim).filter(tag -> !tag.isBlank()).distinct().toList();
+        if (normalized.size() > 10 || normalized.stream().anyMatch(tag -> tag.length() > 30)) {
+            throw new InvalidDocumentPathException("태그는 최대 10개, 각 30자까지 입력할 수 있습니다.");
+        }
+        return normalized;
+    }
+
     private String ensureTrailingNewline(String content) {
         return content.endsWith("\n") ? content : content + "\n";
     }
@@ -381,7 +400,7 @@ public class DocumentService {
         if (metadata == null) {
             throw new DocumentReadException("저장한 문서를 인덱스에서 찾을 수 없습니다.");
         }
-        return metadata.toDetail(content);
+        return metadata.toDetail(MarkdownFrontMatter.parse(content).body());
     }
 
     private DocumentIndex currentIndex() {
@@ -504,13 +523,18 @@ public class DocumentService {
                 return cached;
             }
 
+            String source = Files.readString(path, StandardCharsets.UTF_8);
+            MarkdownFrontMatter.Parsed frontMatter = MarkdownFrontMatter.parse(source);
             String fallbackTitle = path.getFileName().toString().replaceFirst("(?i)\\.md$", "");
-            String title = readTitle(path).orElse(fallbackTitle);
+            String title = Optional.ofNullable(frontMatter.title()).filter(value -> !value.isBlank())
+                    .or(() -> readTitle(frontMatter.body())).orElse(fallbackTitle);
             String category = relativePath.substring(0, relativePath.lastIndexOf('/'));
             String id = encodeId(relativePath);
 
             return new DocumentMetadata(
-                    id, title, category, relativePath, normalize(title), normalize(relativePath), updatedAt, size
+                    id, title, category, relativePath, normalize(title), normalize(relativePath),
+                    frontMatter.tags(), frontMatter.tags().stream().map(this::normalize).toList(),
+                    frontMatter.body(), normalize(frontMatter.body()), updatedAt, size
             );
         } catch (IOException exception) {
             throw new DocumentReadException("문서 메타데이터를 읽는 중 오류가 발생했습니다: " + path, exception);
@@ -518,16 +542,45 @@ public class DocumentService {
     }
 
     private Optional<String> readTitle(Path path) throws IOException {
-        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("# ") && !trimmed.substring(2).isBlank()) {
-                    return Optional.of(trimmed.substring(2).trim());
-                }
-            }
-            return Optional.empty();
+        MarkdownFrontMatter.Parsed parsed = MarkdownFrontMatter.parse(Files.readString(path, StandardCharsets.UTF_8));
+        return Optional.ofNullable(parsed.title()).filter(value -> !value.isBlank()).or(() -> readTitle(parsed.body()));
+    }
+
+    private Optional<String> readTitle(String content) {
+        return content.lines().map(String::trim)
+                .filter(line -> line.startsWith("# ") && !line.substring(2).isBlank())
+                .map(line -> line.substring(2).trim()).findFirst();
+    }
+
+    private int searchScore(DocumentMetadata document, String query) {
+        int score = 0;
+        if (document.normalizedTitle().equals(query)) score += 120;
+        else if (document.normalizedTitle().contains(query)) score += 80;
+        if (document.normalizedTags().contains(query)) score += 100;
+        else if (document.normalizedTags().stream().anyMatch(tag -> tag.contains(query))) score += 60;
+        if (document.normalizedPath().contains(query)) score += 35;
+        return score + Math.min(countOccurrences(document.normalizedContent(), query), 5) * 10;
+    }
+
+    private int countOccurrences(String content, String query) {
+        int count = 0;
+        int fromIndex = 0;
+        while ((fromIndex = content.indexOf(query, fromIndex)) >= 0) {
+            count++;
+            fromIndex += query.length();
         }
+        return count;
+    }
+
+    private String buildExcerpt(DocumentMetadata document, String query) {
+        int matchIndex = document.normalizedContent().indexOf(query);
+        if (matchIndex < 0) return null;
+        int start = Math.max(0, matchIndex - 70);
+        int end = Math.min(document.content().length(), matchIndex + query.length() + 110);
+        String excerpt = document.content().substring(start, end)
+                .replaceAll("[#>*_`~\\[\\]()]", " ")
+                .replaceAll("\\s+", " ").trim();
+        return (start > 0 ? "…" : "") + excerpt + (end < document.content().length() ? "…" : "");
     }
 
     private String toRelativePath(Path path) {
@@ -612,15 +665,22 @@ public class DocumentService {
             String relativePath,
             String normalizedTitle,
             String normalizedPath,
+            List<String> tags,
+            List<String> normalizedTags,
+            String content,
+            String normalizedContent,
             Instant updatedAt,
             long size
     ) {
-        private DocumentModels.DocumentSummaryResponse toSummary() {
-            return new DocumentModels.DocumentSummaryResponse(id, title, category, relativePath, updatedAt);
+        private DocumentModels.DocumentSummaryResponse toSummary(String excerpt) {
+            return new DocumentModels.DocumentSummaryResponse(id, title, category, relativePath, updatedAt, tags, excerpt);
         }
 
         private DocumentModels.DocumentDetailResponse toDetail(String content) {
-            return new DocumentModels.DocumentDetailResponse(id, title, category, relativePath, content, updatedAt);
+            return new DocumentModels.DocumentDetailResponse(id, title, category, relativePath, content, updatedAt, tags);
         }
+    }
+
+    private record SearchResult(DocumentMetadata document, int score) {
     }
 }

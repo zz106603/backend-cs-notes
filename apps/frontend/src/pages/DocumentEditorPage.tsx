@@ -39,14 +39,17 @@ function DocumentEditorForm({ document }: { document?: DocumentDetail }) {
     title: document?.title ?? '',
     category: document?.category ?? '',
     content: document?.content ?? '# 새 문서\n\n여기에 학습한 내용을 정리해 보세요.\n',
+    tags: document?.tags.join(', ') ?? '',
   }), [document])
   const [title, setTitle] = useState(initialValues.title)
   const [category, setCategory] = useState(initialValues.category)
   const [content, setContent] = useState(initialValues.content)
+  const [tags, setTags] = useState(initialValues.tags)
   const [mode, setMode] = useState<'split' | 'write' | 'preview'>('split')
 
-  const isDirty = !document || title !== initialValues.title || category !== initialValues.category || content !== initialValues.content
-  const isValid = title.trim().length > 0 && category.trim().length > 0 && content.length <= 1_000_000
+  const parsedTags = useMemo(() => [...new Set(tags.split(',').map((tag) => tag.trim()).filter(Boolean))], [tags])
+  const isDirty = !document || title !== initialValues.title || category !== initialValues.category || content !== initialValues.content || tags !== initialValues.tags
+  const isValid = title.trim().length > 0 && category.trim().length > 0 && content.length <= 1_000_000 && parsedTags.length <= 10 && parsedTags.every((tag) => tag.length <= 30)
   const previewContent = useMemo(() => {
     if (!title.trim()) return content
     const headingPattern = /^# .+$/m
@@ -70,9 +73,10 @@ function DocumentEditorForm({ document }: { document?: DocumentDetail }) {
           title: title.trim(),
           category: category.trim(),
           content,
+          tags: parsedTags,
           expectedUpdatedAt: document.updatedAt,
         })
-      : api.createDocument({ title: title.trim(), category: category.trim(), content }),
+      : api.createDocument({ title: title.trim(), category: category.trim(), content, tags: parsedTags }),
     onSuccess: async (savedDocument) => {
       queryClient.setQueryData(['document', savedDocument.id], savedDocument)
       await Promise.all([
@@ -130,6 +134,10 @@ function DocumentEditorForm({ document }: { document?: DocumentDetail }) {
           <datalist id="category-options">
             {categoryOptions.map((item) => <option value={item.path} key={item.path} />)}
           </datalist>
+        </label>
+        <label className="editor-metadata__tags">
+          <span>태그 · 쉼표로 구분 (최대 10개)</span>
+          <input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="예: Spring, JPA, 트랜잭션" />
         </label>
       </section>
 

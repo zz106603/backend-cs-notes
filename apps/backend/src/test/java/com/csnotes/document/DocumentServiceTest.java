@@ -96,13 +96,69 @@ class DocumentServiceTest {
     @Test
     void createsDocumentAndAddsTitleHeading() {
         var created = documentService.createDocument(new DocumentModels.CreateDocumentRequest(
-                "인덱스", "데이터베이스", "B-Tree를 정리합니다."
+                "인덱스", "데이터베이스", "B-Tree를 정리합니다.", java.util.List.of("DB", "B-Tree")
         ));
 
         assertThat(created.title()).isEqualTo("인덱스");
         assertThat(created.path()).isEqualTo("데이터베이스/인덱스.md");
         assertThat(created.content()).startsWith("# 인덱스\n\n");
-        assertThat(documentRoot.resolve("데이터베이스/인덱스.md")).hasContent(created.content());
+        assertThat(created.tags()).containsExactly("DB", "B-Tree");
+        assertThat(documentRoot.resolve("데이터베이스/인덱스.md"))
+                .content().startsWith("---\ntitle: \"인덱스\"\ntags:\n  - \"DB\"\n  - \"B-Tree\"\n---\n# 인덱스");
+    }
+
+    @Test
+    void readsFrontMatterTitleAndTagsWithoutExposingItAsContent() throws IOException {
+        Files.writeString(documentRoot.resolve("네트워크/메타데이터.md"), """
+                ---
+                title: "HTTP 메타데이터"
+                tags:
+                  - "HTTP"
+                  - "네트워크"
+                ---
+                # 이전 제목
+
+                본문입니다.
+                """, StandardCharsets.UTF_8);
+        documentService.refreshIndex();
+
+        var summary = documentService.findDocuments("네트워크", "HTTP").getFirst();
+        var detail = documentService.findDocument(summary.id()).orElseThrow();
+
+        assertThat(summary.title()).isEqualTo("HTTP 메타데이터");
+        assertThat(summary.tags()).containsExactly("HTTP", "네트워크");
+        assertThat(detail.content()).startsWith("# 이전 제목").doesNotContain("title:");
+    }
+
+    @Test
+    void searchesBodyAndReturnsMatchingExcerpt() {
+        var documents = documentService.findDocuments(null, "본문");
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.getFirst().title()).isEqualTo("트랜잭션 격리 수준");
+        assertThat(documents.getFirst().excerpt()).contains("본문");
+    }
+
+    @Test
+    void searchesTagsAndRanksExactTagAheadOfBodyMatch() throws IOException {
+        Files.writeString(documentRoot.resolve("네트워크/태그.md"), """
+                ---
+                title: "네트워크 기초"
+                tags:
+                  - "격리"
+                ---
+                # 네트워크 기초
+
+                연결에 대한 설명입니다.
+                """, StandardCharsets.UTF_8);
+        documentService.refreshIndex();
+
+        var documents = documentService.findDocuments(null, "격리");
+
+        assertThat(documents)
+                .extracting(DocumentModels.DocumentSummaryResponse::title)
+                .containsExactly("네트워크 기초", "트랜잭션 격리 수준");
+        assertThat(documents.getFirst().excerpt()).isNull();
     }
 
     @Test

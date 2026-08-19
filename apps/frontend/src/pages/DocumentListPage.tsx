@@ -47,7 +47,7 @@ export function DocumentListPage() {
             ref={searchInput}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="문서 제목 또는 경로 검색"
+            placeholder="제목, 태그 또는 본문 검색"
             aria-label="문서 검색"
           />
           <kbd>/</kbd>
@@ -87,7 +87,16 @@ export function DocumentListPage() {
               </div>
               <div className="document-card__icon"><FileText size={21} /></div>
               <h3>{document.title}</h3>
-              <p>{document.path}</p>
+              {document.excerpt ? (
+                <p className="document-card__excerpt">{document.excerpt}</p>
+              ) : (
+                <p className="document-card__path">{document.path}</p>
+              )}
+              {document.tags.length > 0 && (
+                <div className="tag-list tag-list--card">
+                  {document.tags.slice(0, 3).map((tag) => <span className="tag-chip" key={tag}>#{tag}</span>)}
+                </div>
+              )}
               <footer>
                 <span>{document.category}</span>
                 <time dateTime={document.updatedAt}>{formatDate(document.updatedAt)}</time>

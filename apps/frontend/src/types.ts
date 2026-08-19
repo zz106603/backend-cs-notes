@@ -11,6 +11,8 @@ export interface DocumentSummary {
   category: string
   path: string
   updatedAt: string
+  tags: string[]
+  excerpt?: string | null
 }
 
 export interface DocumentDetail extends DocumentSummary {
@@ -21,6 +23,7 @@ export interface CreateDocumentInput {
   title: string
   category: string
   content: string
+  tags: string[]
 }
 
 export interface UpdateDocumentInput extends CreateDocumentInput {
