@@ -5,15 +5,21 @@ import com.csnotes.rag.embedding.EmbeddingVector;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 
+import java.sql.ResultSet;
 import java.util.List;
+import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class PgVectorChunkStoreTest {
     @Test
@@ -49,5 +55,23 @@ class PgVectorChunkStoreTest {
         assertThatThrownBy(() -> store.search(query, 5, 0.7))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("dimensions");
+    }
+
+    @Test
+    void 같은_본문_해시와_모델의_저장된_벡터를_읽는다() throws Exception {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(resultSet.getString("content_hash")).thenReturn("hash-1");
+        when(resultSet.getString("embedding")).thenReturn("[0.1,0.2]");
+        doAnswer(invocation -> {
+            RowCallbackHandler handler = invocation.getArgument(1);
+            handler.processRow(resultSet);
+            return null;
+        }).when(jdbcTemplate).query(anyString(), any(RowCallbackHandler.class), any(Object[].class));
+        var store = new PgVectorChunkStore(jdbcTemplate, new ObjectMapper(), 2);
+
+        var reusable = store.findReusableEmbeddings("test-model", Set.of("hash-1"));
+
+        assertThat(reusable.get("hash-1")).containsExactly(0.1f, 0.2f);
     }
 }

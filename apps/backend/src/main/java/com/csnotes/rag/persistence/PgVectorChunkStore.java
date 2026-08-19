@@ -8,10 +8,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 @Repository
@@ -57,7 +61,37 @@ public class PgVectorChunkStore implements ChunkVectorStore {
         jdbcTemplate.update("DELETE FROM document_chunk WHERE document_id = ?", documentId);
     }
 
-    /** cosine distance를 0~1 유사도 점수로 바꿔 높은 순서대로 반환한다. */
+    @Override
+    public Map<String, float[]> findReusableEmbeddings(
+            String modelName,
+            Set<String> contentHashes
+    ) {
+        if (contentHashes.isEmpty()) return Map.of();
+
+        String placeholders = String.join(",", java.util.Collections.nCopies(contentHashes.size(), "?"));
+        List<Object> parameters = new java.util.ArrayList<>();
+        parameters.add(modelName);
+        parameters.addAll(contentHashes);
+        Map<String, float[]> reusable = new LinkedHashMap<>();
+        jdbcTemplate.query("""
+                        SELECT content_hash, embedding::text AS embedding
+                          FROM document_chunk
+                         WHERE embedding_model = ?
+                           AND content_hash IN (%s)
+                        """.formatted(placeholders), (RowCallbackHandler) resultSet -> reusable.putIfAbsent(
+                        resultSet.getString("content_hash"), parseVector(resultSet.getString("embedding"))
+                ), parameters.toArray());
+        return Map.copyOf(reusable);
+    }
+
+    @Override
+    public Set<String> findIndexedDocumentIds() {
+        return Set.copyOf(jdbcTemplate.queryForList(
+                "SELECT DISTINCT document_id FROM document_chunk", String.class
+        ));
+    }
+
+    /** cosine distance를 cosine 유사도(-1~1)로 바꿔 높은 순서대로 반환한다. */
     @Override
     public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) {
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("Search limit must be between 1 and 100");
@@ -103,6 +137,17 @@ public class PgVectorChunkStore implements ChunkVectorStore {
         return IntStream.range(0, values.length)
                 .mapToObj(index -> Float.toString(values[index]))
                 .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    }
+
+    private float[] parseVector(String vector) {
+        String value = vector.substring(1, vector.length() - 1);
+        if (value.isBlank()) return new float[0];
+        String[] parts = value.split(",");
+        float[] result = new float[parts.length];
+        for (int index = 0; index < parts.length; index++) {
+            result[index] = Float.parseFloat(parts[index]);
+        }
+        return result;
     }
 
     private void validateDimensions(EmbeddingVector vector) {

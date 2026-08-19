@@ -1,6 +1,23 @@
 spring:
   application:
     name: cs-notes-api
+  ai:
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+    retry:
+      max-attempts: ${RAG_OPENAI_MAX_ATTEMPTS:3}
+      backoff:
+        initial-interval: 1s
+        multiplier: 2
+        max-interval: 10s
 
 server:
   port: 8080
@@ -19,3 +36,18 @@ rag:
   embedding:
     model: ${RAG_EMBEDDING_MODEL:text-embedding-3-small}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1536}
+    batch-size: ${RAG_EMBEDDING_BATCH_SIZE:64}
+  indexing:
+    enabled: ${RAG_INDEXING_ENABLED:false}
+    chunk-max-characters: ${RAG_CHUNK_MAX_CHARACTERS:2000}
+    max-documents: ${RAG_INDEXING_MAX_DOCUMENTS:200}
+    max-chunks-per-document: ${RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT:200}
+    max-characters-per-run: ${RAG_INDEXING_MAX_CHARACTERS_PER_RUN:500000}
+  search:
+    enabled: ${RAG_SEARCH_ENABLED:false}
+    default-limit: ${RAG_SEARCH_DEFAULT_LIMIT:5}
+    max-limit: ${RAG_SEARCH_MAX_LIMIT:20}
+    max-query-characters: ${RAG_SEARCH_MAX_QUERY_CHARACTERS:500}
+    default-minimum-score: ${RAG_SEARCH_DEFAULT_MINIMUM_SCORE:0.5}
+    query-cache-ttl: ${RAG_SEARCH_QUERY_CACHE_TTL:10m}
+    query-cache-max-entries: ${RAG_SEARCH_QUERY_CACHE_MAX_ENTRIES:100}

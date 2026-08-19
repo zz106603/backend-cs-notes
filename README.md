@@ -40,6 +40,96 @@ docker compose up -d postgres
 
 백엔드 실행 환경에 `RAG_PERSISTENCE_ENABLED=true`를 지정하면 Flyway가 Chunk 및 1536차원 임베딩 테이블을 생성합니다. 접속 정보는 `RAG_DATABASE_URL`, `RAG_DATABASE_USERNAME`, `RAG_DATABASE_PASSWORD`로 변경할 수 있습니다.
 
+### OpenAI 임베딩 사용
+
+OpenAI 임베딩은 API 키가 있을 때만 활성화됩니다. 키를 설정하지 않아도 기존 문서 기능과 백엔드는 정상 실행되며, 저장소나 설정 파일에는 키를 기록하지 않습니다.
+
+Windows PowerShell에서는 실행할 터미널 세션에 환경 변수를 설정한 뒤 백엔드를 시작합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+./gradlew.bat :apps:backend:bootRun
+```
+
+기본 모델은 `text-embedding-3-small`, 벡터 차원은 PostgreSQL 스키마와 같은 1536입니다. 필요하면 `RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_DIMENSIONS`, `RAG_EMBEDDING_BATCH_SIZE`로 조정할 수 있지만, 차원을 변경할 때는 pgvector 스키마도 함께 마이그레이션해야 합니다. API 키를 설정하거나 서버를 시작하는 것만으로 요청이 발생하지 않으며, 문서 색인 또는 검색 흐름이 임베딩 포트를 호출할 때 비용이 발생합니다.
+
+API 키와 실제 OpenAI 임베딩 호출을 확인하려면 전용 라이브 테스트를 실행합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+./gradlew.bat :apps:backend:openAiLiveTest
+```
+
+라이브 테스트는 짧은 문장 하나를 임베딩하고 1536차원 벡터가 반환되는지 확인하므로 실제 API 비용이 소량 발생합니다. `OPENAI_API_KEY`가 없으면 태스크를 건너뛰며, 일반 `:apps:backend:test`에서는 `openai-live` 태그를 항상 제외합니다.
+
+### 문서를 pgvector에 색인
+
+M4.5 색인은 기본적으로 비활성화되어 있습니다. PostgreSQL을 시작하고 아래 환경 변수를 설정한 터미널에서 백엔드를 실행합니다.
+
+```powershell
+docker compose up -d postgres
+$env:OPENAI_API_KEY = "발급받은 API 키"
+$env:RAG_PERSISTENCE_ENABLED = "true"
+$env:RAG_INDEXING_ENABLED = "true"
+./gradlew.bat :apps:backend:bootRun
+```
+
+먼저 비용이 발생하지 않는 미리보기를 실행합니다. `embeddedChunkCount`와 `embeddingCharacterCount`가 실제 OpenAI 전송 예상량입니다.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index"
+```
+
+예상량을 확인한 뒤에만 실제 색인을 명시적으로 실행합니다.
+
+```powershell
+Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index?dryRun=false"
+```
+
+기존 문서의 같은 본문 해시와 모델로 저장된 벡터는 재사용하고 새 청크만 OpenAI에 요청합니다. 기본 방어 한도는 문서 200개, 문서당 청크 200개, 실행당 신규 임베딩 입력 500,000자이며 각각 `RAG_INDEXING_MAX_DOCUMENTS`, `RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT`, `RAG_INDEXING_MAX_CHARACTERS_PER_RUN`으로 더 낮출 수 있습니다. 한도를 넘으면 OpenAI 호출 전에 요청을 중단하고, 동시에 두 색인을 실행하는 것도 차단합니다.
+
+저장 결과는 Docker의 PostgreSQL 안 `document_chunk` 테이블에서 확인할 수 있습니다.
+
+```powershell
+docker compose exec postgres psql -U cs_notes -d cs_notes -c "SELECT document_title, count(*) AS chunks, embedding_model, max(indexed_at) AS indexed_at FROM document_chunk GROUP BY document_title, embedding_model ORDER BY document_title;"
+```
+
+IntelliJ Database 또는 DBeaver에서는 `localhost:5432`, 데이터베이스·사용자·비밀번호 `cs_notes`로 연결한 뒤 `public.document_chunk` 테이블을 열면 됩니다. 실제 벡터는 `embedding` 열에 저장됩니다.
+
+### pgvector 의미 검색 확인
+
+M4.6 검색 API를 사용하려면 색인을 완료한 뒤 백엔드 실행 환경에 검색 기능을 추가로 활성화합니다.
+
+```powershell
+$env:RAG_SEARCH_ENABLED = "true"
+./gradlew.bat :apps:backend:bootRun
+```
+
+검색 요청 한 번마다 검색어 임베딩이 필요하므로 유료 호출임을 드러내기 위해 POST API로 제공합니다.
+
+```powershell
+$body = @{
+  query = "Spring 트랜잭션 전파는 어떻게 동작하나요?"
+  limit = 5
+  minimumScore = 0.5
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8080/api/rag/search" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+결과의 `score`는 pgvector cosine 유사도이며 높을수록 질의와 가까운 Chunk입니다. `documentPath`, `sectionPath`, `content`를 함께 비교해 상위 결과가 실제 질문 의도와 맞는지 확인합니다. 같은 서버 프로세스에서 같은 검색어를 10분 안에 다시 요청하면 질의 벡터를 캐시하며 응답의 `cachedQueryEmbedding`이 `true`가 됩니다.
+
+이미 색인된 로컬 DB를 대상으로 OpenAI 질의 임베딩부터 pgvector 정렬까지 한 번에 확인하려면 다음 라이브 테스트를 사용할 수 있습니다. 실제 API 비용이 소량 발생하며 PostgreSQL 컨테이너가 실행 중이어야 합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+docker compose up -d postgres
+./gradlew.bat :apps:backend:ragSearchLiveTest
+```
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)

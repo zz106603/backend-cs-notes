@@ -26,6 +26,7 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springframework.ai:spring-ai-model")
+    implementation("org.springframework.ai:spring-ai-starter-model-openai")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -34,6 +35,38 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+tasks.named<Test>("test") {
+    useJUnitPlatform {
+        excludeTags("openai-live", "rag-search-live")
+    }
+}
+
+tasks.register<Test>("ragSearchLiveTest") {
+    description = "실제 OpenAI 질의 임베딩과 로컬 pgvector 유사도 검색을 확인합니다."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("rag-search-live")
+    }
+    onlyIf("OPENAI_API_KEY 환경 변수와 실행 중인 로컬 PostgreSQL이 필요합니다.") {
+        !System.getenv("OPENAI_API_KEY").isNullOrBlank()
+    }
+}
+
+tasks.register<Test>("openAiLiveTest") {
+    description = "실제 OpenAI API로 임베딩 연결을 확인합니다."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("openai-live")
+    }
+    onlyIf("OPENAI_API_KEY 환경 변수가 설정되어 있어야 합니다.") {
+        !System.getenv("OPENAI_API_KEY").isNullOrBlank()
+    }
 }
 
 tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
