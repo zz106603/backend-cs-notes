@@ -12,6 +12,7 @@ export interface DocumentSummary {
   path: string
   updatedAt: string
   tags: string[]
+  excerpt?: string | null
 }
 
 export interface DocumentDetail extends DocumentSummary {

@@ -131,6 +131,37 @@ class DocumentServiceTest {
     }
 
     @Test
+    void searchesBodyAndReturnsMatchingExcerpt() {
+        var documents = documentService.findDocuments(null, "본문");
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.getFirst().title()).isEqualTo("트랜잭션 격리 수준");
+        assertThat(documents.getFirst().excerpt()).contains("본문");
+    }
+
+    @Test
+    void searchesTagsAndRanksExactTagAheadOfBodyMatch() throws IOException {
+        Files.writeString(documentRoot.resolve("네트워크/태그.md"), """
+                ---
+                title: "네트워크 기초"
+                tags:
+                  - "격리"
+                ---
+                # 네트워크 기초
+
+                연결에 대한 설명입니다.
+                """, StandardCharsets.UTF_8);
+        documentService.refreshIndex();
+
+        var documents = documentService.findDocuments(null, "격리");
+
+        assertThat(documents)
+                .extracting(DocumentModels.DocumentSummaryResponse::title)
+                .containsExactly("네트워크 기초", "트랜잭션 격리 수준");
+        assertThat(documents.getFirst().excerpt()).isNull();
+    }
+
+    @Test
     void rejectsDuplicateAndUnsafeDocumentPaths() {
         assertThatThrownBy(() -> documentService.createDocument(new DocumentModels.CreateDocumentRequest(
                 "트랜잭션", "데이터베이스", "본문"

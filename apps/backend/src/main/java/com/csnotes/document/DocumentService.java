@@ -67,13 +67,17 @@ public class DocumentService {
                 || document.category().equalsIgnoreCase(category.trim())
                 || document.category().toLowerCase(Locale.ROOT)
                 .startsWith(category.trim().toLowerCase(Locale.ROOT) + "/");
-        Predicate<DocumentMetadata> queryFilter = document -> normalizedQuery.isBlank()
-                || document.normalizedTitle().contains(normalizedQuery)
-                || document.normalizedPath().contains(normalizedQuery);
+        var documents = currentIndex().documents().stream().filter(categoryFilter);
+        if (normalizedQuery.isBlank()) {
+            return documents.map(document -> document.toSummary(null)).toList();
+        }
 
-        return currentIndex().documents().stream()
-                .filter(categoryFilter.and(queryFilter))
-                .map(DocumentMetadata::toSummary)
+        return documents
+                .map(document -> new SearchResult(document, searchScore(document, normalizedQuery)))
+                .filter(result -> result.score() > 0)
+                .sorted(Comparator.comparingInt(SearchResult::score).reversed()
+                        .thenComparing(result -> result.document().title(), String.CASE_INSENSITIVE_ORDER))
+                .map(result -> result.document().toSummary(buildExcerpt(result.document(), normalizedQuery)))
                 .toList();
     }
 
@@ -529,7 +533,8 @@ public class DocumentService {
 
             return new DocumentMetadata(
                     id, title, category, relativePath, normalize(title), normalize(relativePath),
-                    frontMatter.tags(), updatedAt, size
+                    frontMatter.tags(), frontMatter.tags().stream().map(this::normalize).toList(),
+                    frontMatter.body(), normalize(frontMatter.body()), updatedAt, size
             );
         } catch (IOException exception) {
             throw new DocumentReadException("문서 메타데이터를 읽는 중 오류가 발생했습니다: " + path, exception);
@@ -545,6 +550,37 @@ public class DocumentService {
         return content.lines().map(String::trim)
                 .filter(line -> line.startsWith("# ") && !line.substring(2).isBlank())
                 .map(line -> line.substring(2).trim()).findFirst();
+    }
+
+    private int searchScore(DocumentMetadata document, String query) {
+        int score = 0;
+        if (document.normalizedTitle().equals(query)) score += 120;
+        else if (document.normalizedTitle().contains(query)) score += 80;
+        if (document.normalizedTags().contains(query)) score += 100;
+        else if (document.normalizedTags().stream().anyMatch(tag -> tag.contains(query))) score += 60;
+        if (document.normalizedPath().contains(query)) score += 35;
+        return score + Math.min(countOccurrences(document.normalizedContent(), query), 5) * 10;
+    }
+
+    private int countOccurrences(String content, String query) {
+        int count = 0;
+        int fromIndex = 0;
+        while ((fromIndex = content.indexOf(query, fromIndex)) >= 0) {
+            count++;
+            fromIndex += query.length();
+        }
+        return count;
+    }
+
+    private String buildExcerpt(DocumentMetadata document, String query) {
+        int matchIndex = document.normalizedContent().indexOf(query);
+        if (matchIndex < 0) return null;
+        int start = Math.max(0, matchIndex - 70);
+        int end = Math.min(document.content().length(), matchIndex + query.length() + 110);
+        String excerpt = document.content().substring(start, end)
+                .replaceAll("[#>*_`~\\[\\]()]", " ")
+                .replaceAll("\\s+", " ").trim();
+        return (start > 0 ? "…" : "") + excerpt + (end < document.content().length() ? "…" : "");
     }
 
     private String toRelativePath(Path path) {
@@ -630,15 +666,21 @@ public class DocumentService {
             String normalizedTitle,
             String normalizedPath,
             List<String> tags,
+            List<String> normalizedTags,
+            String content,
+            String normalizedContent,
             Instant updatedAt,
             long size
     ) {
-        private DocumentModels.DocumentSummaryResponse toSummary() {
-            return new DocumentModels.DocumentSummaryResponse(id, title, category, relativePath, updatedAt, tags);
+        private DocumentModels.DocumentSummaryResponse toSummary(String excerpt) {
+            return new DocumentModels.DocumentSummaryResponse(id, title, category, relativePath, updatedAt, tags, excerpt);
         }
 
         private DocumentModels.DocumentDetailResponse toDetail(String content) {
             return new DocumentModels.DocumentDetailResponse(id, title, category, relativePath, content, updatedAt, tags);
         }
+    }
+
+    private record SearchResult(DocumentMetadata document, int score) {
     }
 }

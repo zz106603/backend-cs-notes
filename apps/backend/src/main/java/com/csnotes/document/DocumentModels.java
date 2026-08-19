@@ -26,10 +26,11 @@ public final class DocumentModels {
             String category,
             String path,
             Instant updatedAt,
-            List<String> tags
+            List<String> tags,
+            String excerpt
     ) {
         public DocumentSummaryResponse(String id, String title, String category, String path, Instant updatedAt) {
-            this(id, title, category, path, updatedAt, List.of());
+            this(id, title, category, path, updatedAt, List.of(), null);
         }
     }
 
