@@ -60,6 +60,7 @@ public class DocumentService {
         return currentIndex().categories();
     }
 
+    /** 제목·경로·태그·본문의 관련도 점수를 계산해 검색 결과를 정렬한다. */
     public List<DocumentModels.DocumentSummaryResponse> findDocuments(String category, String query) {
         String normalizedQuery = normalize(query);
         Predicate<DocumentMetadata> categoryFilter = document -> category == null
@@ -403,6 +404,7 @@ public class DocumentService {
         return metadata.toDetail(MarkdownFrontMatter.parse(content).body());
     }
 
+    /** 요청마다 전체 파일을 읽지 않고 갱신 주기 동안 메모리 인덱스를 재사용한다. */
     private DocumentIndex currentIndex() {
         long now = System.nanoTime();
         if (index.initialized() && now - lastRefreshNanos < refreshIntervalNanos) {
@@ -419,6 +421,7 @@ public class DocumentService {
         }
     }
 
+    /** 파일의 수정 시각과 크기가 같으면 기존 메타데이터를 재사용해 인덱싱 비용을 줄인다. */
     private DocumentIndex buildIndex(DocumentIndex previousIndex) {
         if (!Files.isDirectory(documentRoot)) {
             throw new DocumentReadException("문서 루트를 찾을 수 없습니다: " + documentRoot);

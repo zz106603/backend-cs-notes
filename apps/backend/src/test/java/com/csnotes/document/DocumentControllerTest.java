@@ -31,7 +31,7 @@ class DocumentControllerTest {
     DocumentService documentService;
 
     @Test
-    void createsDocumentWithCreatedStatus() throws Exception {
+    void 문서를_생성하고_생성됨_상태를_반환한다() throws Exception {
         var response = new DocumentModels.DocumentDetailResponse(
                 "document-id", "인덱스", "데이터베이스", "데이터베이스/인덱스.md",
                 "# 인덱스\n", Instant.parse("2026-08-19T00:00:00Z")
@@ -49,7 +49,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    void rejectsInvalidCreateRequest() throws Exception {
+    void 올바르지_않은_문서_생성_요청을_거부한다() throws Exception {
         mockMvc.perform(post("/api/documents")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -60,7 +60,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    void returnsConflictWhenTrashTargetAlreadyExists() throws Exception {
+    void 휴지통에_같은_문서가_있으면_충돌을_반환한다() throws Exception {
         doThrow(new DocumentConflictException("휴지통에 동일한 문서가 있습니다."))
                 .when(documentService).moveDocumentToTrash("document-id");
 
@@ -70,7 +70,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    void listsAndPermanentlyDeletesTrashDocument() throws Exception {
+    void 휴지통_문서를_조회하고_영구_삭제한다() throws Exception {
         when(documentService.findTrashDocuments()).thenReturn(List.of(
                 new DocumentModels.TrashDocumentResponse(
                         "trash-id", "TCP", "네트워크/TCP.md", Instant.parse("2026-08-19T01:00:00Z")
@@ -87,7 +87,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    void restoresTrashDocument() throws Exception {
+    void 휴지통_문서를_복원한다() throws Exception {
         var response = new DocumentModels.DocumentDetailResponse(
                 "restored-id", "TCP", "네트워크", "네트워크/TCP.md",
                 "# TCP\n", Instant.parse("2026-08-19T02:00:00Z")
