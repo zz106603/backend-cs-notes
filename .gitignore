@@ -39,3 +39,6 @@ apps/backend/build/
 # Local environment
 .env
 .env.local
+
+# Local document trash
+.trash/

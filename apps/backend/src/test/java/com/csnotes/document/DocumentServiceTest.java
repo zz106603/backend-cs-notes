@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DocumentServiceTest {
 
@@ -90,5 +91,133 @@ class DocumentServiceTest {
         assertThat(after.id()).isEqualTo(before.id());
         assertThat(after.title()).isEqualTo("ACID 트랜잭션");
         assertThat(detail.content()).contains("변경된 본문");
+    }
+
+    @Test
+    void createsDocumentAndAddsTitleHeading() {
+        var created = documentService.createDocument(new DocumentModels.CreateDocumentRequest(
+                "인덱스", "데이터베이스", "B-Tree를 정리합니다."
+        ));
+
+        assertThat(created.title()).isEqualTo("인덱스");
+        assertThat(created.path()).isEqualTo("데이터베이스/인덱스.md");
+        assertThat(created.content()).startsWith("# 인덱스\n\n");
+        assertThat(documentRoot.resolve("데이터베이스/인덱스.md")).hasContent(created.content());
+    }
+
+    @Test
+    void rejectsDuplicateAndUnsafeDocumentPaths() {
+        assertThatThrownBy(() -> documentService.createDocument(new DocumentModels.CreateDocumentRequest(
+                "트랜잭션", "데이터베이스", "본문"
+        ))).isInstanceOf(DocumentConflictException.class);
+
+        assertThatThrownBy(() -> documentService.createDocument(new DocumentModels.CreateDocumentRequest(
+                "탈출", "..", "본문"
+        ))).isInstanceOf(InvalidDocumentPathException.class);
+    }
+
+    @Test
+    void updatesAndMovesDocumentWithNewStableResponse() {
+        var before = documentService.findDocuments("데이터베이스", null).getFirst();
+        var updated = documentService.updateDocument(before.id(), new DocumentModels.UpdateDocumentRequest(
+                "ACID", "백엔드", "# 이전 제목\n\n새 본문", before.updatedAt()
+        ));
+
+        assertThat(updated.id()).isNotEqualTo(before.id());
+        assertThat(updated.path()).isEqualTo("백엔드/ACID.md");
+        assertThat(updated.content()).startsWith("# ACID\n");
+        assertThat(documentRoot.resolve("데이터베이스/트랜잭션.md")).doesNotExist();
+        assertThat(documentRoot.resolve("백엔드/ACID.md")).exists();
+    }
+
+    @Test
+    void rejectsUpdateWhenExpectedVersionIsStale() {
+        var before = documentService.findDocuments("데이터베이스", null).getFirst();
+
+        assertThatThrownBy(() -> documentService.updateDocument(before.id(), new DocumentModels.UpdateDocumentRequest(
+                before.title(), before.category(), "변경", java.time.Instant.EPOCH
+        )))
+                .isInstanceOf(DocumentConflictException.class)
+                .hasMessageContaining("최신 내용");
+    }
+
+    @Test
+    void movesDocumentToSeparateTrashAndHidesItFromDocuments() {
+        var before = documentService.findDocuments("네트워크", null).getFirst();
+
+        documentService.moveDocumentToTrash(before.id());
+
+        assertThat(documentRoot.resolve("네트워크/TCP.md")).doesNotExist();
+        assertThat(documentRoot.resolve(".trash/네트워크/TCP.md")).exists();
+        assertThat(documentService.findDocuments(null, null))
+                .extracting(DocumentModels.DocumentSummaryResponse::title)
+                .doesNotContain("TCP");
+        assertThat(documentService.findTrashDocuments())
+                .extracting(DocumentModels.TrashDocumentResponse::originalPath)
+                .containsExactly("네트워크/TCP.md");
+    }
+
+    @Test
+    void permanentlyDeletesDocumentOnlyFromTrash() {
+        var before = documentService.findDocuments("네트워크", null).getFirst();
+        documentService.moveDocumentToTrash(before.id());
+        var trashed = documentService.findTrashDocuments().getFirst();
+
+        documentService.permanentlyDeleteTrashDocument(trashed.id());
+
+        assertThat(documentRoot.resolve(".trash/네트워크/TCP.md")).doesNotExist();
+        assertThat(documentService.findTrashDocuments()).isEmpty();
+        assertThatThrownBy(() -> documentService.permanentlyDeleteTrashDocument(before.id()))
+                .isInstanceOf(DocumentNotFoundException.class);
+    }
+
+    @Test
+    void restoresTrashDocumentToOriginalPath() {
+        var before = documentService.findDocuments("네트워크", null).getFirst();
+        documentService.moveDocumentToTrash(before.id());
+        var trashed = documentService.findTrashDocuments().getFirst();
+
+        var restored = documentService.restoreTrashDocument(trashed.id());
+
+        assertThat(restored.path()).isEqualTo("네트워크/TCP.md");
+        assertThat(documentRoot.resolve("네트워크/TCP.md")).exists();
+        assertThat(documentRoot.resolve(".trash/네트워크/TCP.md")).doesNotExist();
+        assertThat(documentService.findTrashDocuments()).isEmpty();
+    }
+
+    @Test
+    void rejectsRestoreWhenOriginalPathAlreadyExists() throws IOException {
+        var before = documentService.findDocuments("네트워크", null).getFirst();
+        documentService.moveDocumentToTrash(before.id());
+        var trashed = documentService.findTrashDocuments().getFirst();
+        Files.createDirectories(documentRoot.resolve("네트워크"));
+        Files.writeString(documentRoot.resolve("네트워크/TCP.md"), "# 새 TCP", StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> documentService.restoreTrashDocument(trashed.id()))
+                .isInstanceOf(DocumentConflictException.class)
+                .hasMessageContaining("원래 경로");
+    }
+
+    @Test
+    void buildsNestedCategoryTreeAndFiltersDescendants() throws IOException {
+        Files.createDirectories(documentRoot.resolve("백엔드/Spring"));
+        Files.createDirectories(documentRoot.resolve("백엔드/보안"));
+        Files.writeString(documentRoot.resolve("백엔드/Spring/DI.md"), "# 의존성 주입", StandardCharsets.UTF_8);
+        Files.writeString(documentRoot.resolve("백엔드/보안/JWT.md"), "# JWT", StandardCharsets.UTF_8);
+        documentService.refreshIndex();
+
+        var backend = documentService.findCategories().stream()
+                .filter(category -> category.path().equals("백엔드"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(backend.documentCount()).isEqualTo(2);
+        assertThat(backend.children())
+                .extracting(DocumentModels.CategoryResponse::path)
+                .containsExactly("백엔드/Spring", "백엔드/보안");
+        assertThat(documentService.findDocuments("백엔드/Spring", null))
+                .extracting(DocumentModels.DocumentSummaryResponse::title)
+                .containsExactly("의존성 주입");
+        assertThat(documentService.findDocuments("백엔드", null)).hasSize(2);
     }
 }
