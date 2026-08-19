@@ -12,6 +12,7 @@
 
 # Package Files #
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
@@ -24,3 +25,20 @@ hs_err_pid*
 replay_pid*
 
 .idea/*
+
+# Frontend
+node_modules/
+dist/
+
+# Backend
+target/
+.gradle/
+build/
+apps/backend/build/
+
+# Local environment
+.env
+.env.local
+
+# Local document trash
+.trash/

@@ -2,6 +2,34 @@
 
 백엔드 개발자를 위한 컴퓨터 공학(CS) 및 소프트웨어 공학 지식 정리 저장소입니다.
 
+## 로컬 웹 애플리케이션
+
+저장소의 Markdown 문서를 카테고리별로 탐색하고 읽을 수 있는 웹 애플리케이션이 `apps` 아래에 있습니다.
+
+### 백엔드 실행
+
+Java 21이 필요합니다. Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 없습니다.
+
+```bash
+./gradlew :apps:backend:bootRun
+```
+
+저장소 루트에서 실행하며, Windows PowerShell에서는 `./gradlew.bat :apps:backend:bootRun`을 사용합니다. macOS와 Linux에서는 `./gradlew :apps:backend:bootRun`을 사용합니다.
+
+기본적으로 저장소 루트의 Markdown 문서를 읽으며 API는 `http://localhost:8080`에서 실행됩니다. 다른 문서 디렉터리를 사용하려면 `CS_NOTES_ROOT` 환경 변수를 지정할 수 있습니다.
+
+### 프론트엔드 실행
+
+Node.js 20.19 이상이 필요합니다.
+
+```bash
+cd apps/frontend
+npm install
+npm run dev
+```
+
+브라우저에서 `http://localhost:5173`을 열면 됩니다. 개발 서버는 `/api` 요청을 로컬 백엔드로 전달합니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)

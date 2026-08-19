@@ -1,0 +1,11 @@
+spring:
+  application:
+    name: cs-notes-api
+
+server:
+  port: 8080
+
+cs-notes:
+  documents:
+    root: ${CS_NOTES_ROOT:${user.dir}}
+    refresh-interval-ms: ${CS_NOTES_REFRESH_INTERVAL_MS:2000}
