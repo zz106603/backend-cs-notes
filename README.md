@@ -40,6 +40,28 @@ docker compose up -d postgres
 
 백엔드 실행 환경에 `RAG_PERSISTENCE_ENABLED=true`를 지정하면 Flyway가 Chunk 및 1536차원 임베딩 테이블을 생성합니다. 접속 정보는 `RAG_DATABASE_URL`, `RAG_DATABASE_USERNAME`, `RAG_DATABASE_PASSWORD`로 변경할 수 있습니다.
 
+### OpenAI 임베딩 사용
+
+OpenAI 임베딩은 API 키가 있을 때만 활성화됩니다. 키를 설정하지 않아도 기존 문서 기능과 백엔드는 정상 실행되며, 저장소나 설정 파일에는 키를 기록하지 않습니다.
+
+Windows PowerShell에서는 실행할 터미널 세션에 환경 변수를 설정한 뒤 백엔드를 시작합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+./gradlew.bat :apps:backend:bootRun
+```
+
+기본 모델은 `text-embedding-3-small`, 벡터 차원은 PostgreSQL 스키마와 같은 1536입니다. 필요하면 `RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_DIMENSIONS`, `RAG_EMBEDDING_BATCH_SIZE`로 조정할 수 있지만, 차원을 변경할 때는 pgvector 스키마도 함께 마이그레이션해야 합니다. API 키를 설정하거나 서버를 시작하는 것만으로 요청이 발생하지 않으며, 문서 색인 또는 검색 흐름이 임베딩 포트를 호출할 때 비용이 발생합니다.
+
+API 키와 실제 OpenAI 임베딩 호출을 확인하려면 전용 라이브 테스트를 실행합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+./gradlew.bat :apps:backend:openAiLiveTest
+```
+
+라이브 테스트는 짧은 문장 하나를 임베딩하고 1536차원 벡터가 반환되는지 확인하므로 실제 API 비용이 소량 발생합니다. `OPENAI_API_KEY`가 없으면 태스크를 건너뛰며, 일반 `:apps:backend:test`에서는 `openai-live` 태그를 항상 제외합니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)

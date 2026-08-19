@@ -63,6 +63,18 @@ Spring Boot 자동 구성, `EmbeddingModel`, `VectorStore`, ETL 추상화가 현
 
 현재 스키마는 `text-embedding-3-small` 기본 차원인 1536을 기준으로 한다. 모델 또는 차원을 변경할 때는 기존 벡터와 HNSW 인덱스를 그대로 혼용하지 말고 새 마이그레이션으로 재구성해야 한다.
 
+## M4.4 적용 내용
+
+- Spring AI OpenAI starter와 `OpenAiEmbeddingModel`을 이용한 실제 임베딩 어댑터
+- `OPENAI_API_KEY`가 있을 때만 모델을 생성하는 조건부 활성화
+- 문서 내용을 로그에 노출하지 않는 배치 수, 입력 수, 처리 시간 및 실패 유형 기록
+- 설정 가능한 배치 크기와 지수 백오프 재시도
+- 외부 SDK 예외를 애플리케이션의 `EmbeddingProviderException`으로 변환
+
+Spring AI는 OpenAI API를 무료로 제공하는 서비스가 아니라 SDK와 Spring Boot 통합 계층이다. 실제 임베딩 요청 비용과 사용 한도는 OpenAI 계정에 귀속된다. 애플리케이션 시작만으로는 API 요청을 보내지 않으며, 이후 색인 및 검색 유스케이스가 `EmbeddingProvider`를 호출할 때만 네트워크 요청이 발생한다.
+
+자동 구성은 API 키가 없는 환경에서의 기동을 확실히 보장하기 위해 비활성화하고, 프로젝트의 조건부 설정에서 같은 Spring AI 모델을 직접 생성한다. 덕분에 테스트와 일반 문서 탐색은 외부 서비스 없이 실행할 수 있고, 도메인 계층은 계속 `EmbeddingProvider` 포트만 의존한다.
+
 ## 다음 단계
 
 문서 작성·수정·휴지통 이벤트를 Chunk 생성과 임베딩 동기화에 연결한다. 이후 동일한 질의 집합으로 한국어 검색 품질, 비용, 응답 시간을 기록한다.

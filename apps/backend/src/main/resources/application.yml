@@ -1,6 +1,23 @@
 spring:
   application:
     name: cs-notes-api
+  ai:
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+    retry:
+      max-attempts: ${RAG_OPENAI_MAX_ATTEMPTS:3}
+      backoff:
+        initial-interval: 1s
+        multiplier: 2
+        max-interval: 10s
 
 server:
   port: 8080
@@ -19,3 +36,4 @@ rag:
   embedding:
     model: ${RAG_EMBEDDING_MODEL:text-embedding-3-small}
     dimensions: ${RAG_EMBEDDING_DIMENSIONS:1536}
+    batch-size: ${RAG_EMBEDDING_BATCH_SIZE:64}
