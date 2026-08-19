@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.6-pg17-bookworm
+    environment:
+      POSTGRES_DB: cs_notes
+      POSTGRES_USER: cs_notes
+      POSTGRES_PASSWORD: cs_notes
+    ports:
+      - "5432:5432"
+    volumes:
+      - cs-notes-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cs_notes -d cs_notes"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  cs-notes-postgres:

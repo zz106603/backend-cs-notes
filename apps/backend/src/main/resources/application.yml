@@ -9,3 +9,13 @@ cs-notes:
   documents:
     root: ${CS_NOTES_ROOT:${user.dir}}
     refresh-interval-ms: ${CS_NOTES_REFRESH_INTERVAL_MS:2000}
+
+rag:
+  persistence:
+    enabled: ${RAG_PERSISTENCE_ENABLED:false}
+    url: ${RAG_DATABASE_URL:jdbc:postgresql://localhost:5432/cs_notes}
+    username: ${RAG_DATABASE_USERNAME:cs_notes}
+    password: ${RAG_DATABASE_PASSWORD:cs_notes}
+  embedding:
+    model: ${RAG_EMBEDDING_MODEL:text-embedding-3-small}
+    dimensions: ${RAG_EMBEDDING_DIMENSIONS:1536}

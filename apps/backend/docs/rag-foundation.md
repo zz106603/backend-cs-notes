@@ -53,6 +53,16 @@ Spring Boot 자동 구성, `EmbeddingModel`, `VectorStore`, ETL 추상화가 현
 - 입력 순서와 결과 개수, ID, 모델, 차원을 검증한다.
 - pgvector나 외부 API 타입이 도메인 계층으로 새어 나오지 않는다.
 
+## M4.3 적용 내용
+
+- Spring AI `EmbeddingModel`을 `EmbeddingProvider`로 변환하는 어댑터
+- Chunk 단위 교체와 cosine 유사도 검색을 제공하는 `ChunkVectorStore`
+- PostgreSQL 17 및 pgvector 0.8.6 로컬 Docker 환경
+- Flyway 기반 `document_chunk` 테이블과 HNSW 인덱스
+- DB가 없어도 기존 서비스가 실행되도록 하는 조건부 활성화
+
+현재 스키마는 `text-embedding-3-small` 기본 차원인 1536을 기준으로 한다. 모델 또는 차원을 변경할 때는 기존 벡터와 HNSW 인덱스를 그대로 혼용하지 말고 새 마이그레이션으로 재구성해야 한다.
+
 ## 다음 단계
 
-M4.3에서 Spring AI 기반 임베딩 어댑터와 PostgreSQL·pgvector 저장 어댑터를 구현한다. 그 전에 사용할 임베딩 모델을 결정하고 차원, 한국어 검색 품질, 비용, 문서·질의 input type 지원 여부를 기록한다.
+문서 작성·수정·휴지통 이벤트를 Chunk 생성과 임베딩 동기화에 연결한다. 이후 동일한 질의 집합으로 한국어 검색 품질, 비용, 응답 시간을 기록한다.
