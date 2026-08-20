@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowRight, ArrowUpRight, BrainCircuit, FilePlus2, FileText, ListFilter, Search, Sparkles } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, BrainCircuit, FilePlus2, FileText, Grid2X2, List, ListFilter, Search, Sparkles } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { FormEvent } from 'react'
 import { api } from '../api'
 import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { usePersistentState } from '../hooks/usePersistentState'
 import type { RagSearchHit } from '../types'
 
 function formatDate(value: string) {
@@ -47,6 +48,7 @@ export function DocumentListPage() {
   const category = searchParams.get('category') ?? undefined
   const [query, setQuery] = useState('')
   const [searchMode, setSearchMode] = useState<'general' | 'semantic'>('general')
+  const [viewMode, setViewMode] = usePersistentState<'cards' | 'list'>('cs-notes-library-view', 'cards')
   const debouncedQuery = useDebouncedValue(query, 250)
   const searchInput = useRef<HTMLInputElement>(null)
   const { data: documents, isLoading, error } = useQuery({
@@ -140,6 +142,12 @@ export function DocumentListPage() {
           </div>
           <div className="section-actions">
             <p>{searchMode === 'semantic' ? `${semanticDocuments.length} related notes` : `${documents?.length ?? 0} notes`}</p>
+            {searchMode === 'general' && (
+              <div className="view-mode-switch" role="group" aria-label="문서 보기 방식">
+                <button type="button" className={viewMode === 'cards' ? 'active' : ''} onClick={() => setViewMode('cards')} aria-label="카드형 보기"><Grid2X2 size={14} /></button>
+                <button type="button" className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')} aria-label="목록형 보기"><List size={15} /></button>
+              </div>
+            )}
             <Link to="/notes/new" className="primary-button primary-button--small">
               <FilePlus2 size={15} /> 새 문서
             </Link>
@@ -156,7 +164,7 @@ export function DocumentListPage() {
           </div>
         )}
 
-        {searchMode === 'general' && <div className="document-grid">
+        {searchMode === 'general' && <div className={`document-grid ${viewMode === 'list' ? 'document-grid--list' : ''}`}>
           {documents?.map((document, index) => (
             <Link className="document-card" to={`/notes/${document.id}`} key={document.id}>
               <div className="document-card__top">

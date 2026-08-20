@@ -1,7 +1,8 @@
-import { lazy, Suspense, useState } from 'react'
-import { BookOpenText, Braces, Menu, Search, X } from 'lucide-react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { BookOpenText, Braces, Menu, Moon, Search, Sun, X } from 'lucide-react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
+import { usePersistentState } from './hooks/usePersistentState'
 
 const DocumentListPage = lazy(() => import('./pages/DocumentListPage').then((module) => ({ default: module.DocumentListPage })))
 const DocumentPage = lazy(() => import('./pages/DocumentPage').then((module) => ({ default: module.DocumentPage })))
@@ -12,6 +13,13 @@ const RagIndexingPage = lazy(() => import('./pages/RagIndexingPage').then((modul
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const preferredTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  const [theme, setTheme] = usePersistentState<'light' | 'dark'>('cs-notes-theme', preferredTheme)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
+  }, [theme])
 
   return (
     <div className="app-shell">
@@ -50,6 +58,15 @@ export default function App() {
             <span>Knowledge base</span>
             <small>Markdown powered</small>
           </div>
+          <button
+            className="theme-toggle"
+            type="button"
+            aria-label={theme === 'light' ? '다크 테마로 변경' : '라이트 테마로 변경'}
+            title={theme === 'light' ? '다크 테마' : '라이트 테마'}
+            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          >
+            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+          </button>
         </div>
       </aside>
 
