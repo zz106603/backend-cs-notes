@@ -163,8 +163,10 @@ export function DocumentListPage() {
                 <span className="document-number">{String(index + 1).padStart(2, '0')}</span>
                 <ArrowUpRight size={19} />
               </div>
-              <div className="document-card__icon"><FileText size={21} /></div>
-              <h3>{document.title}</h3>
+              <div className="document-card__heading">
+                <div className="document-card__icon"><FileText size={20} /></div>
+                <h3>{document.title}</h3>
+              </div>
               {document.excerpt ? (
                 <p className="document-card__excerpt">{document.excerpt}</p>
               ) : (
