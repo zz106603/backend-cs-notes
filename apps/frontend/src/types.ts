@@ -36,3 +36,52 @@ export interface TrashDocument {
   originalPath: string
   deletedAt: string
 }
+
+export interface RagSearchHit {
+  chunkId: string
+  documentId: string
+  documentTitle: string
+  documentPath: string
+  tags: string[]
+  sectionPath: string[]
+  content: string
+  score: number
+}
+
+export interface RagSearchResponse {
+  query: string
+  embeddingModel: string
+  limit: number
+  minimumScore: number
+  cachedQueryEmbedding: boolean
+  results: RagSearchHit[]
+}
+
+export interface RagAnswerSource {
+  number: number
+  chunkId: string
+  documentId: string
+  documentTitle: string
+  documentPath: string
+  sectionPath: string[]
+  score: number
+}
+
+export interface RagAnswerUsage {
+  promptTokens?: number | null
+  completionTokens?: number | null
+  totalTokens?: number | null
+}
+
+export interface RagAnswerResponse {
+  requestId: string
+  question: string
+  answer: string
+  answerModel: string
+  generated: boolean
+  cached: boolean
+  contextCharacters: number
+  usage: RagAnswerUsage
+  estimatedCostUsd: number
+  sources: RagAnswerSource[]
+}
