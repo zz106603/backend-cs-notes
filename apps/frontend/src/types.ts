@@ -56,3 +56,30 @@ export interface RagSearchResponse {
   cachedQueryEmbedding: boolean
   results: RagSearchHit[]
 }
+
+export interface RagAnswerSource {
+  number: number
+  chunkId: string
+  documentId: string
+  documentTitle: string
+  documentPath: string
+  sectionPath: string[]
+  score: number
+}
+
+export interface RagAnswerUsage {
+  promptTokens?: number | null
+  completionTokens?: number | null
+  totalTokens?: number | null
+}
+
+export interface RagAnswerResponse {
+  question: string
+  answer: string
+  answerModel: string
+  generated: boolean
+  cached: boolean
+  contextCharacters: number
+  usage: RagAnswerUsage
+  sources: RagAnswerSource[]
+}

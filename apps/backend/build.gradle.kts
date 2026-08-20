@@ -39,7 +39,7 @@ tasks.withType<Test> {
 
 tasks.named<Test>("test") {
     useJUnitPlatform {
-        excludeTags("openai-live", "rag-search-live")
+        excludeTags("openai-live", "rag-search-live", "rag-answer-live")
     }
 }
 
@@ -52,6 +52,19 @@ tasks.register<Test>("ragSearchLiveTest") {
         includeTags("rag-search-live")
     }
     onlyIf("OPENAI_API_KEY 환경 변수와 실행 중인 로컬 PostgreSQL이 필요합니다.") {
+        !System.getenv("OPENAI_API_KEY").isNullOrBlank()
+    }
+}
+
+tasks.register<Test>("ragAnswerLiveTest") {
+    description = "실제 OpenAI와 로컬 pgvector로 근거 기반 RAG 답변을 확인합니다."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("rag-answer-live")
+    }
+    onlyIf("OPENAI_API_KEY 환경 변수와 색인된 로컬 PostgreSQL이 필요합니다.") {
         !System.getenv("OPENAI_API_KEY").isNullOrBlank()
     }
 }

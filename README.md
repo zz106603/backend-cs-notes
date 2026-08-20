@@ -132,6 +132,30 @@ docker compose up -d postgres
 
 프론트엔드의 문서 목록 검색창 위에서 `일반 검색`과 `의미 검색`을 전환할 수 있습니다. 의미 검색은 검색 버튼 또는 Enter를 눌렀을 때만 실행하며, 결과를 문서별로 묶어 최고 관련도, 일치한 제목 계층, Chunk 미리보기와 원문 링크를 표시합니다. 화면에서 사용하려면 백엔드를 시작하기 전에 `OPENAI_API_KEY`, `RAG_PERSISTENCE_ENABLED=true`, `RAG_SEARCH_ENABLED=true`를 설정하고 M4.5 색인을 먼저 완료해야 합니다.
 
+### 문서 기반 RAG 답변 생성
+
+M4.8 답변 기능은 검색 결과를 참고 자료로 구성한 뒤 OpenAI 채팅 모델을 호출합니다. 기본적으로 비활성화되어 있으므로 백엔드 실행 전에 다음 값을 추가합니다.
+
+```powershell
+$env:OPENAI_API_KEY = "발급받은 API 키"
+$env:RAG_PERSISTENCE_ENABLED = "true"
+$env:RAG_SEARCH_ENABLED = "true"
+$env:RAG_ANSWER_ENABLED = "true"
+./gradlew.bat :apps:backend:bootRun
+```
+
+프론트엔드 사이드바의 `문서에 질문`에서 질문을 제출하면 Markdown 답변과 `[1]` 형식의 출처 문서가 함께 표시됩니다. 관련 Chunk가 없으면 채팅 모델을 호출하지 않으며, 기본적으로 출처 4개, 컨텍스트 12,000자, 출력 600토큰으로 제한합니다. 같은 질문과 Chunk 조합의 답변은 10분간 캐시합니다. 모델과 한도는 `RAG_ANSWER_MODEL`, `RAG_ANSWER_MAX_OUTPUT_TOKENS`, `RAG_ANSWER_MAX_CONTEXT_CHARACTERS`, `RAG_ANSWER_DEFAULT_SOURCE_LIMIT`으로 조정할 수 있습니다.
+
+실제 OpenAI와 이미 색인된 pgvector를 함께 검증하려면 PostgreSQL 실행 후 별도 라이브 테스트를 사용합니다. 검색어 임베딩과 답변 생성 비용이 발생합니다.
+
+```powershell
+docker compose up -d postgres
+$env:OPENAI_API_KEY = "발급받은 API 키"
+./gradlew.bat :apps:backend:ragAnswerLiveTest
+```
+
+OpenAI의 텍스트 생성 지침 구성은 [공식 OpenAI 텍스트 생성 문서](https://developers.openai.com/api/docs/guides/text)를 참고했습니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)
