@@ -130,6 +130,8 @@ docker compose up -d postgres
 ./gradlew.bat :apps:backend:ragSearchLiveTest
 ```
 
+프론트엔드의 문서 목록 검색창 위에서 `일반 검색`과 `의미 검색`을 전환할 수 있습니다. 의미 검색은 검색 버튼 또는 Enter를 눌렀을 때만 실행하며, 결과를 문서별로 묶어 최고 관련도, 일치한 제목 계층, Chunk 미리보기와 원문 링크를 표시합니다. 화면에서 사용하려면 백엔드를 시작하기 전에 `OPENAI_API_KEY`, `RAG_PERSISTENCE_ENABLED=true`, `RAG_SEARCH_ENABLED=true`를 설정하고 M4.5 색인을 먼저 완료해야 합니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)
