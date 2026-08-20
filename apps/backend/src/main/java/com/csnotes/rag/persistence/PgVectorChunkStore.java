@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.IntStream;
+import java.util.ArrayList;
 
 @Repository
 @ConditionalOnProperty(name = "rag.persistence.enabled", havingValue = "true")
@@ -91,6 +92,39 @@ public class PgVectorChunkStore implements ChunkVectorStore {
         ));
     }
 
+    @Override
+    public Map<String, IndexedDocumentState> findIndexedDocumentStates() {
+        Map<String, MutableIndexedDocument> documents = new LinkedHashMap<>();
+        jdbcTemplate.query("""
+                SELECT document_id, document_title, document_path, tags, embedding_model,
+                       sequence, content_hash, section_path
+                  FROM document_chunk
+                 ORDER BY document_id, sequence
+                """, (RowCallbackHandler) resultSet -> {
+            String documentId = resultSet.getString("document_id");
+            String documentTitle = resultSet.getString("document_title");
+            String documentPath = resultSet.getString("document_path");
+            List<String> tags = fromJson(resultSet.getString("tags"));
+            String embeddingModel = resultSet.getString("embedding_model");
+            MutableIndexedDocument document = documents.computeIfAbsent(documentId, ignored ->
+                    new MutableIndexedDocument(
+                            documentId, documentTitle, documentPath, tags, embeddingModel, new ArrayList<>()
+                    ));
+            document.chunks().add(new IndexedDocumentState.IndexedChunkState(
+                    resultSet.getInt("sequence"),
+                    resultSet.getString("content_hash"),
+                    fromJson(resultSet.getString("section_path"))
+            ));
+        });
+        return documents.values().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                MutableIndexedDocument::documentId,
+                document -> new IndexedDocumentState(
+                        document.documentId(), document.documentTitle(), document.documentPath(),
+                        document.tags(), document.embeddingModel(), List.copyOf(document.chunks())
+                )
+        ));
+    }
+
     /** cosine distance를 cosine 유사도(-1~1)로 바꿔 높은 순서대로 반환한다. */
     @Override
     public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) {
@@ -154,5 +188,15 @@ public class PgVectorChunkStore implements ChunkVectorStore {
         if (vector.dimensions() != dimensions) {
             throw new IllegalArgumentException("Embedding dimensions must match pgvector schema: " + dimensions);
         }
+    }
+
+    private record MutableIndexedDocument(
+            String documentId,
+            String documentTitle,
+            String documentPath,
+            List<String> tags,
+            String embeddingModel,
+            List<IndexedDocumentState.IndexedChunkState> chunks
+    ) {
     }
 }

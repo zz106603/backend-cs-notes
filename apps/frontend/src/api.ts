@@ -1,4 +1,4 @@
-import type { Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
+import type { Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -8,7 +8,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { detail?: string } | null
-    const notFoundMessage = path === '/api/rag/answer'
+    const notFoundMessage = path.startsWith('/api/rag/index')
+      ? '문서 색인 기능이 비활성화되어 있습니다. 백엔드의 RAG 색인 설정을 확인해 주세요.'
+      : path === '/api/rag/answer'
       ? 'RAG 답변 기능이 비활성화되어 있습니다. 백엔드의 답변 생성 설정을 확인해 주세요.'
       : path.startsWith('/api/rag/')
         ? '의미 검색 기능이 비활성화되어 있습니다. 백엔드의 RAG 검색 설정을 확인해 주세요.'
@@ -56,4 +58,6 @@ export const api = {
     method: 'POST',
     body: JSON.stringify({ question, sourceLimit: 4, minimumScore: 0.3 }),
   }),
+  previewRagIndex: () => request<RagIndexingResult>('/api/rag/index', { method: 'POST' }),
+  executeRagIndex: () => request<RagIndexingResult>('/api/rag/index?dryRun=false', { method: 'POST' }),
 }

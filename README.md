@@ -1,311 +1,149 @@
-# Backend CS Notes
+# CS Notes
 
-백엔드 개발자를 위한 컴퓨터 공학(CS) 및 소프트웨어 공학 지식 정리 저장소입니다.
+> **기록한 CS 지식을 의미 검색하고, 내 문서를 근거로 AI와 복습하는 개인 학습 서비스**
 
-## 로컬 웹 애플리케이션
+Markdown 문서를 단순히 모아두는 데서 그치지 않고, **기록 → 정리 → 검색 → 질문 → 복습**으로 이어지는 학습 흐름을 하나의 화면에서 제공합니다.
 
-저장소의 Markdown 문서를 카테고리별로 탐색하고 읽을 수 있는 웹 애플리케이션이 `apps` 아래에 있습니다.
+| Light mode | Dark mode |
+| :---: | :---: |
+| ![CS Notes 라이트 모드](docs/images/cs-notes-overview.png) | ![CS Notes 다크 모드](docs/images/cs-notes-overview-dark.png) |
 
-### 백엔드 실행
+## 핵심 학습 흐름
 
-Java 21이 필요합니다. Gradle Wrapper가 포함되어 있어 Gradle을 별도로 설치할 필요는 없습니다.
+| 단계 | 무엇을 하나요? |
+| --- | --- |
+| **01 기록** | 학습한 내용을 Markdown으로 작성합니다. |
+| **02 정리** | 폴더와 태그로 문서를 분류합니다. |
+| **03 색인** | 변경된 문서만 선별해 벡터로 저장합니다. |
+| **04 검색** | 키워드 검색과 의미 검색으로 필요한 내용을 찾습니다. |
+| **05 복습** | 내 문서를 근거로 AI에게 질문하고 출처를 확인합니다. |
 
-```bash
-./gradlew :apps:backend:bootRun
+## 주요 기능
+
+### 01. 내 언어로 기록
+
+**작성한 내용은 로컬 Markdown 파일로 유지됩니다.**
+
+화면에서 제목, 폴더, 태그와 본문을 입력해 새 문서를 만들고 기존 문서를 수정할 수 있습니다. 특정 서비스의 데이터 형식에 종속되지 않아 저장소의 문서를 그대로 관리할 수 있습니다.
+
+![Markdown 문서 작성 화면](docs/images/document-editor.png)
+
+### 02. 구조적으로 탐색
+
+**실제 폴더 계층과 태그를 기준으로 문서를 구분합니다.**
+
+백엔드, 데이터베이스, 운영체제 같은 상위 주제와 그 아래의 Spring, 보안, DevOps 같은 하위 폴더를 함께 보여줍니다. 삭제한 문서는 휴지통에서 복원하거나 영구 삭제할 수 있습니다.
+
+### 03. 변경된 문서만 색인
+
+**색인 전에 비용 없이 변경 범위와 예상 입력량을 확인합니다.**
+
+`문서 색인` 화면은 Markdown과 PostgreSQL의 저장 상태를 비교해 다음 내용을 미리 보여줍니다.
+
+- **변경 문서** — 신규·수정·삭제된 문서
+- **신규 Chunk** — OpenAI 임베딩이 필요한 Chunk
+- **재사용 Chunk** — 기존 벡터를 그대로 사용할 수 있는 Chunk
+- **예상 입력량** — OpenAI로 전송될 전체 문자 수
+
+내용과 Chunk가 기존 색인 상태와 같으면 임베딩을 다시 요청하지 않습니다. 사용자가 `변경 사항 색인`을 실행한 경우에만 실제 API 호출이 발생합니다.
+
+![문서 색인 변경 사항 미리보기](docs/images/indexing-preview.png)
+
+### 04. 키워드 또는 의미로 검색
+
+**정확한 단어를 알 때는 일반 검색, 개념만 기억날 때는 의미 검색을 사용합니다.**
+
+일반 검색은 제목·본문·태그에서 일치하는 단어를 찾습니다. 의미 검색은 질문과 가까운 문서 Chunk를 찾아 관련 섹션, 내용 미리보기와 관련도 점수를 표시하며 결과에서 원문으로 바로 이동할 수 있습니다.
+
+### 05. 내 문서와 함께 복습
+
+**AI 답변과 함께 근거가 된 원문을 확인합니다.**
+
+질문과 가까운 Chunk를 pgvector에서 검색하고, 검색된 내용만 OpenAI 채팅 모델의 context로 전달합니다. 답변에는 출처 문서가 함께 표시되며, 관련 근거를 찾지 못하면 문서에 없는 내용을 추측해 답하지 않습니다.
+
+![문서 근거 RAG 질의·답변 화면](docs/images/rag-answer.png)
+
+## 서비스 동작 방식
+
+```text
+React + Vite
+      │
+      │ REST API
+      ▼
+Spring Boot
+      ├── 로컬 Markdown ───────── 문서 작성·조회·검색
+      ├── PostgreSQL + pgvector ─ Chunk·임베딩 저장 및 유사도 검색
+      └── OpenAI ──────────────── 임베딩 및 문서 기반 답변 생성
 ```
 
-저장소 루트에서 실행하며, Windows PowerShell에서는 `./gradlew.bat :apps:backend:bootRun`을 사용합니다. macOS와 Linux에서는 `./gradlew :apps:backend:bootRun`을 사용합니다.
+문서는 제목 구조를 고려해 Chunk로 나뉩니다. 각 Chunk의 임베딩은 pgvector에 저장되고, 의미 검색 시 질문 벡터와의 **cosine 유사도**로 관련 내용을 찾습니다. RAG 답변은 이 검색 결과만 참고 자료로 사용합니다.
 
-기본적으로 저장소 루트의 Markdown 문서를 읽으며 API는 `http://localhost:8080`에서 실행됩니다. 다른 문서 디렉터리를 사용하려면 `CS_NOTES_ROOT` 환경 변수를 지정할 수 있습니다.
+## 비용 방어 장치
 
-### 프론트엔드 실행
+> OpenAI API 키를 등록하거나 서버를 실행하는 것만으로는 비용이 발생하지 않습니다. **문서 색인, 의미 검색 또는 RAG 답변을 실제로 요청할 때만 API가 호출됩니다.**
 
-Node.js 20.19 이상이 필요합니다.
+- 색인 전에 API를 호출하지 않는 미리보기를 제공합니다.
+- 변경되지 않은 Chunk의 임베딩을 재사용합니다.
+- 한 번에 색인할 문서 수, Chunk 수와 문자 수를 제한합니다.
+- 동일한 검색과 답변을 일정 시간 캐시합니다.
+- 답변 출력 토큰과 일일 예상 비용을 제한합니다.
+- 질문 원문은 저장하지 않고 해시와 사용량 정보만 기록합니다.
 
-```bash
+## 기술 구성
+
+| 영역 | 기술 |
+| --- | --- |
+| **Frontend** | React 19, TypeScript, Vite, TanStack Query |
+| **Backend** | Java 21, Spring Boot 3, Spring AI, Gradle Kotlin DSL |
+| **Document** | Markdown, YAML front matter |
+| **RAG storage** | PostgreSQL, pgvector, Flyway |
+| **AI** | OpenAI Embedding API, OpenAI Chat API |
+
+<details>
+<summary><strong>로컬 실행 방법 보기</strong></summary>
+
+### 기본 문서 기능
+
+PostgreSQL과 OpenAI API 키 없이 실행할 수 있습니다. Java 21과 Node.js 20.19 이상이 필요합니다.
+
+```powershell
+# backend
+./gradlew.bat :apps:backend:bootRun
+
+# frontend (별도 터미널)
 cd apps/frontend
 npm install
 npm run dev
 ```
 
-브라우저에서 `http://localhost:5173`을 열면 됩니다. 개발 서버는 `/api` 요청을 로컬 백엔드로 전달합니다.
+브라우저에서 `http://localhost:5173`으로 접속합니다.
 
-### RAG용 PostgreSQL 실행
+### RAG 기능
 
-pgvector 저장소는 기본적으로 비활성화되어 있어 기존 문서 기능은 DB 없이 실행됩니다. 로컬 DB를 시작하려면 저장소 루트에서 다음을 실행합니다.
-
-```bash
-docker compose up -d postgres
-```
-
-백엔드 실행 환경에 `RAG_PERSISTENCE_ENABLED=true`를 지정하면 Flyway가 Chunk 및 1536차원 임베딩 테이블을 생성합니다. 접속 정보는 `RAG_DATABASE_URL`, `RAG_DATABASE_USERNAME`, `RAG_DATABASE_PASSWORD`로 변경할 수 있습니다.
-
-### OpenAI 임베딩 사용
-
-OpenAI 임베딩은 API 키가 있을 때만 활성화됩니다. 키를 설정하지 않아도 기존 문서 기능과 백엔드는 정상 실행되며, 저장소나 설정 파일에는 키를 기록하지 않습니다.
-
-Windows PowerShell에서는 실행할 터미널 세션에 환경 변수를 설정한 뒤 백엔드를 시작합니다.
-
-```powershell
-$env:OPENAI_API_KEY = "발급받은 API 키"
-./gradlew.bat :apps:backend:bootRun
-```
-
-기본 모델은 `text-embedding-3-small`, 벡터 차원은 PostgreSQL 스키마와 같은 1536입니다. 필요하면 `RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_DIMENSIONS`, `RAG_EMBEDDING_BATCH_SIZE`로 조정할 수 있지만, 차원을 변경할 때는 pgvector 스키마도 함께 마이그레이션해야 합니다. API 키를 설정하거나 서버를 시작하는 것만으로 요청이 발생하지 않으며, 문서 색인 또는 검색 흐름이 임베딩 포트를 호출할 때 비용이 발생합니다.
-
-API 키와 실제 OpenAI 임베딩 호출을 확인하려면 전용 라이브 테스트를 실행합니다.
-
-```powershell
-$env:OPENAI_API_KEY = "발급받은 API 키"
-./gradlew.bat :apps:backend:openAiLiveTest
-```
-
-라이브 테스트는 짧은 문장 하나를 임베딩하고 1536차원 벡터가 반환되는지 확인하므로 실제 API 비용이 소량 발생합니다. `OPENAI_API_KEY`가 없으면 태스크를 건너뛰며, 일반 `:apps:backend:test`에서는 `openai-live` 태그를 항상 제외합니다.
-
-### 문서를 pgvector에 색인
-
-M4.5 색인은 기본적으로 비활성화되어 있습니다. PostgreSQL을 시작하고 아래 환경 변수를 설정한 터미널에서 백엔드를 실행합니다.
+PostgreSQL을 실행하고 같은 터미널 세션에 환경 변수를 설정한 뒤 백엔드를 시작합니다.
 
 ```powershell
 docker compose up -d postgres
+
 $env:OPENAI_API_KEY = "발급받은 API 키"
 $env:RAG_PERSISTENCE_ENABLED = "true"
 $env:RAG_INDEXING_ENABLED = "true"
-./gradlew.bat :apps:backend:bootRun
-```
-
-먼저 비용이 발생하지 않는 미리보기를 실행합니다. `embeddedChunkCount`와 `embeddingCharacterCount`가 실제 OpenAI 전송 예상량입니다.
-
-```powershell
-Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index"
-```
-
-예상량을 확인한 뒤에만 실제 색인을 명시적으로 실행합니다.
-
-```powershell
-Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index?dryRun=false"
-```
-
-기존 문서의 같은 본문 해시와 모델로 저장된 벡터는 재사용하고 새 청크만 OpenAI에 요청합니다. 기본 방어 한도는 문서 200개, 문서당 청크 200개, 실행당 신규 임베딩 입력 500,000자이며 각각 `RAG_INDEXING_MAX_DOCUMENTS`, `RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT`, `RAG_INDEXING_MAX_CHARACTERS_PER_RUN`으로 더 낮출 수 있습니다. 한도를 넘으면 OpenAI 호출 전에 요청을 중단하고, 동시에 두 색인을 실행하는 것도 차단합니다.
-
-저장 결과는 Docker의 PostgreSQL 안 `document_chunk` 테이블에서 확인할 수 있습니다.
-
-```powershell
-docker compose exec postgres psql -U cs_notes -d cs_notes -c "SELECT document_title, count(*) AS chunks, embedding_model, max(indexed_at) AS indexed_at FROM document_chunk GROUP BY document_title, embedding_model ORDER BY document_title;"
-```
-
-IntelliJ Database 또는 DBeaver에서는 `localhost:5432`, 데이터베이스·사용자·비밀번호 `cs_notes`로 연결한 뒤 `public.document_chunk` 테이블을 열면 됩니다. 실제 벡터는 `embedding` 열에 저장됩니다.
-
-### pgvector 의미 검색 확인
-
-M4.6 검색 API를 사용하려면 색인을 완료한 뒤 백엔드 실행 환경에 검색 기능을 추가로 활성화합니다.
-
-```powershell
-$env:RAG_SEARCH_ENABLED = "true"
-./gradlew.bat :apps:backend:bootRun
-```
-
-검색 요청 한 번마다 검색어 임베딩이 필요하므로 유료 호출임을 드러내기 위해 POST API로 제공합니다.
-
-```powershell
-$body = @{
-  query = "Spring 트랜잭션 전파는 어떻게 동작하나요?"
-  limit = 5
-  minimumScore = 0.5
-} | ConvertTo-Json
-
-Invoke-RestMethod -Method Post `
-  -Uri "http://localhost:8080/api/rag/search" `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-결과의 `score`는 pgvector cosine 유사도이며 높을수록 질의와 가까운 Chunk입니다. `documentPath`, `sectionPath`, `content`를 함께 비교해 상위 결과가 실제 질문 의도와 맞는지 확인합니다. 같은 서버 프로세스에서 같은 검색어를 10분 안에 다시 요청하면 질의 벡터를 캐시하며 응답의 `cachedQueryEmbedding`이 `true`가 됩니다.
-
-이미 색인된 로컬 DB를 대상으로 OpenAI 질의 임베딩부터 pgvector 정렬까지 한 번에 확인하려면 다음 라이브 테스트를 사용할 수 있습니다. 실제 API 비용이 소량 발생하며 PostgreSQL 컨테이너가 실행 중이어야 합니다.
-
-```powershell
-$env:OPENAI_API_KEY = "발급받은 API 키"
-docker compose up -d postgres
-./gradlew.bat :apps:backend:ragSearchLiveTest
-```
-
-프론트엔드의 문서 목록 검색창 위에서 `일반 검색`과 `의미 검색`을 전환할 수 있습니다. 의미 검색은 검색 버튼 또는 Enter를 눌렀을 때만 실행하며, 결과를 문서별로 묶어 최고 관련도, 일치한 제목 계층, Chunk 미리보기와 원문 링크를 표시합니다. 화면에서 사용하려면 백엔드를 시작하기 전에 `OPENAI_API_KEY`, `RAG_PERSISTENCE_ENABLED=true`, `RAG_SEARCH_ENABLED=true`를 설정하고 M4.5 색인을 먼저 완료해야 합니다.
-
-### 문서 기반 RAG 답변 생성
-
-M4.8 답변 기능은 검색 결과를 참고 자료로 구성한 뒤 OpenAI 채팅 모델을 호출합니다. 기본적으로 비활성화되어 있으므로 백엔드 실행 전에 다음 값을 추가합니다.
-
-```powershell
-$env:OPENAI_API_KEY = "발급받은 API 키"
-$env:RAG_PERSISTENCE_ENABLED = "true"
 $env:RAG_SEARCH_ENABLED = "true"
 $env:RAG_ANSWER_ENABLED = "true"
+
 ./gradlew.bat :apps:backend:bootRun
 ```
 
-프론트엔드 사이드바의 `문서에 질문`에서 질문을 제출하면 Markdown 답변과 `[1]` 형식의 출처 문서가 함께 표시됩니다. 관련 Chunk가 없으면 채팅 모델을 호출하지 않으며, 기본적으로 출처 4개, 컨텍스트 12,000자, 출력 600토큰으로 제한합니다. 같은 질문과 Chunk 조합의 답변은 10분간 캐시합니다. 모델과 한도는 `RAG_ANSWER_MODEL`, `RAG_ANSWER_MAX_OUTPUT_TOKENS`, `RAG_ANSWER_MAX_CONTEXT_CHARACTERS`, `RAG_ANSWER_DEFAULT_SOURCE_LIMIT`으로 조정할 수 있습니다.
+API 키는 저장소나 설정 파일에 기록하지 않습니다. 기본 일일 RAG 답변 예상 비용 한도는 `$0.25`이며, 실제 청구 금액은 OpenAI 사용량 대시보드를 기준으로 확인해야 합니다.
 
-실제 OpenAI와 이미 색인된 pgvector를 함께 검증하려면 PostgreSQL 실행 후 별도 라이브 테스트를 사용합니다. 검색어 임베딩과 답변 생성 비용이 발생합니다.
+</details>
 
-```powershell
-docker compose up -d postgres
-$env:OPENAI_API_KEY = "발급받은 API 키"
-./gradlew.bat :apps:backend:ragAnswerLiveTest
+## 프로젝트 방향
+
+> **많이 보관하는 것보다, 다시 찾고 내 것으로 만드는 과정을 짧게 만듭니다.**
+
+```text
+학습 → 내 언어로 기록 → 필요한 내용 검색 → 근거와 함께 복습 → 문서 보완
 ```
 
-OpenAI의 텍스트 생성 지침 구성은 [공식 OpenAI 텍스트 생성 문서](https://developers.openai.com/api/docs/guides/text)를 참고했습니다.
-
-### RAG 답변 비용과 실행 기록
-
-M4.9부터 답변 요청의 상태, 토큰 수, 예상 비용, 소요 시간과 출처 수를 PostgreSQL의 `rag_answer_usage`에 기록합니다. 질문 원문은 저장하지 않고 SHA-256 해시만 보관합니다. 화면에는 요청 ID 앞 8자리와 해당 응답의 예상 비용을 표시합니다.
-
-기본 일일 예상 비용 한도는 `$0.25`입니다. 오늘 누적 비용과 다음 호출의 보수적인 최대 예상 비용을 합산해 한도를 넘으면 OpenAI 호출 전에 `429`로 차단합니다. 가격이나 한도는 모델 가격 변경과 사용 목적에 맞게 직접 조정해야 합니다.
-
-```powershell
-$env:RAG_ANSWER_DAILY_COST_LIMIT_USD = "0.25"
-$env:RAG_ANSWER_INPUT_PRICE_PER_MILLION_USD = "0.40"
-$env:RAG_ANSWER_OUTPUT_PRICE_PER_MILLION_USD = "1.60"
-$env:RAG_ANSWER_BUDGET_ZONE_ID = "Asia/Seoul"
-```
-
-오늘 실행 기록은 PostgreSQL에서 다음과 같이 확인할 수 있습니다.
-
-```sql
-SELECT request_id, status, model, prompt_tokens, completion_tokens,
-       estimated_cost_usd, source_count, elapsed_ms, created_at
-FROM rag_answer_usage
-WHERE created_at >= CURRENT_DATE
-ORDER BY created_at DESC;
-```
-
-`estimated_cost_usd`는 설정한 토큰 단가로 계산한 참고값이며 최종 청구 금액은 OpenAI 사용량 대시보드가 기준입니다. 캐시 응답과 검색 근거가 없는 응답은 답변 모델 비용을 `$0`으로 기록합니다. 실패 응답은 서버가 실제 처리했을 가능성까지 고려해 보수적인 최대 예상 비용으로 기록합니다.
-
-## 목차 (Categories)
-
-### [백엔드 (Backend)](./백엔드)
-#### [Spring](./백엔드/Spring)
-*   [의존성 주입(DI)](./백엔드/Spring/의존성%20주입(DI).md)
-*   [Spring Bean 관리](./백엔드/Spring/Spring%20Bean%20관리.md)
-*   [@Value 어노테이션 주의점](./백엔드/Spring/@Value%20어노테이션%20주의점.md)
-*   [Spring MVC 실행 흐름](./백엔드/Spring/Spring%20MVC%20실행%20흐름.md)
-*   [@ResponseBody 동작 방식](./백엔드/Spring/@ResponseBody%20동작%20방식.md)
-*   [Filter vs Interceptor](./백엔드/Spring/Filter%20vs%20Interceptor.md)
-*   [@ExceptionHandler 어노테이션](./백엔드/Spring/@ExceptionHandler%20어노테이션.md)
-*   [스프링 트랜잭션 전파 속성](./백엔드/Spring/스프링%20트랜잭션%20전파%20속성.md)
-*   [스프링 트랜잭션 AOP 동작 흐름](./백엔드/Spring/스프링%20트랜잭션%20AOP%20동작%20흐름.md)
-*   [트랜잭션 롤백 예외](./백엔드/Spring/트랜잭션%20롤백%20예외.md)
-*   [JPA 페이징 쿼리](./백엔드/Spring/JPA%20페이징%20쿼리.md)
-*   [JPA Fetch Join과 페이징](./백엔드/Spring/JPA%20Fetch%20Join과%20페이징.md)
-*   [Lazy Loading](./백엔드/Spring/Lazy%20Loading.md)
-*   [OneToOne 관계 Lazy Loading](./백엔드/Spring/OneToOne%20관계%20Lazy%20Loading.md)
-*   [Statement vs PreparedStatement](./백엔드/Spring/Statement%20vs%20PreparedStatement.md)
-
-#### [보안 (Security)](./백엔드/보안)
-*   [쿠키 vs 세션](./백엔드/보안/쿠키%20vs%20세션.md)
-*   [JWT 특징 및 주의사항](./백엔드/보안/JWT%20특징%20및%20주의사항.md)
-*   [암호화 방식(대칭키-비대칭키)](./백엔드/보안/암호화%20방식(대칭키-비대칭키).md)
-*   [CSRF 공격](./백엔드/보안/CSRF%20공격.md)
-
-#### [DevOps](./백엔드/DevOps)
-*   [IaC(Infrastructure as Code)](./백엔드/DevOps/IaC(Infrastructure%20as%20Code).md)
-*   [Gradle](./백엔드/DevOps/Gradle.md)
-*   [서버리스](./백엔드/DevOps/서버리스.md)
-
----
-
-### [소프트웨어 공학 (Software Engineering)](./소프트웨어%20공학)
-*   [Ack와 메시지 유실 방지 전략](./소프트웨어%20공학/Ack와%20메시지%20유실%20방지%20전략.md)
-*   [가상화](./소프트웨어%20공학/가상화.md)
-*   [무중단 배포](./소프트웨어%20공학/무중단%20배포.md)
-*   [SOLID 원칙](./소프트웨어%20공학/SOLID%20원칙.md)
-*   [레이어드 아키텍처](./소프트웨어%20공학/레이어드%20아키텍처.md)
-*   [명령어 파이프라인](./소프트웨어%20공학/명령어%20파이프라인.md)
-*   [참조 지역성의 원리](./소프트웨어%20공학/참조%20지역성의%20원리.md)
-*   [CI-CD 파이프라인](./소프트웨어%20공학/CI-CD%20파이프라인.md)
-*   [단일 장애 지점(SPOF)](./소프트웨어%20공학/단일%20장애%20지점(SPOF).md)
-
-#### [테스트 (Test)](./소프트웨어%20공학/테스트)
-*   [테스트 격리](./소프트웨어%20공학/테스트/테스트%20격리.md)
-*   [테스트 더블](./소프트웨어%20공학/테스트/테스트%20더블.md)
-*   [테스트 주도 개발(TDD)](./소프트웨어%20공학/테스트/테스트%20주도%20개발(TDD).md)
-
-#### [디자인 패턴 (Design Pattern)](./소프트웨어%20공학/디자인%20패턴)
-*   [전략 패턴](./소프트웨어%20공학/디자인%20패턴/전략%20패턴.md)
-*   [PRG 패턴](./소프트웨어%20공학/디자인%20패턴/PRG%20패턴.md)
-*   [싱글톤 패턴](./소프트웨어%20공학/디자인%20패턴/싱글톤%20패턴.md)
-*   [CQRS 패턴](./소프트웨어%20공학/디자인%20패턴/CQRS%20패턴.md)
-*   [템플릿 메서드 패턴](./소프트웨어%20공학/디자인%20패턴/템플릿%20메서드%20패턴.md)
-*   [트랜잭셔널 아웃박스 패턴](./소프트웨어%20공학/디자인%20패턴/트랜잭셔널%20아웃박스%20패턴.md)
-*   [널 오브젝트 패턴](./소프트웨어%20공학/디자인%20패턴/널%20오브젝트%20패턴(Null%20Object%20Pattern).md)
-
-#### [관측성 (Observability)](./소프트웨어%20공학/관측성)
-*   [헬스 체크](./소프트웨어%20공학/관측성/헬스%20체크.md)
-*   [Micrometer](./소프트웨어%20공학/관측성/Micrometer.md)
-*   [K6-Prometheus-Grafana](./소프트웨어%20공학/관측성/K6-Prometheus-Grafana.md)
-
----
-
-### [데이터베이스 (Database)](./데이터베이스)
-*   [데이터베이스 정규화](./데이터베이스/데이터베이스%20정규화.md)
-*   [SQL 인젝션](./데이터베이스/SQL%20인젝션.md)
-*   [최종적 일관성](./데이터베이스/최종적%20일관성.md)
-*   [이벤트 소싱](./데이터베이스/이벤트%20소싱.md)
-*   [트랜잭션 격리 수준](./데이터베이스/트랜잭션%20격리%20수준.md)
-*   [Lock(낙관적-비관적)](./데이터베이스/Lock(낙관적-비관적).md)
-*   [분산환경 Redis 잠금](./데이터베이스/분산환경%20Redis%20잠금.md)
-*   [논리 vs 물리 삭제](./데이터베이스/논리%20vs%20물리%20삭제.md)
-*   [RDB 페이징 쿼리 필요성](./데이터베이스/RDB%20페이징%20쿼리%20필요성.md)
-*   [NoSQL 데이터베이스 유형](./데이터베이스/NoSQL%20데이터베이스%20유형.md)
-*   [DB 차이점(행 기반, 열 기반)](./데이터베이스/DB%20차이점(행%20기반,%20열%20기반).md)
-*   [NOT IN 쿼리 문제 및 최적화](./데이터베이스/NOT%20IN%20쿼리%20문제%20및%20최적화.md)
-
----
-
-### [운영체제 (Operating System)](./운영체제)
-*   [시스템 콜](./운영체제/시스템%20콜.md)
-*   [프로세스 시스템(단일-멀티)](./운영체제/프로세스%20시스템(단일-멀티).md)
-*   [멀티 스레딩](./운영체제/멀티%20스레딩.md)
-*   [스레드 vs 코루틴](./운영체제/스레드%20vs%20코루틴.md)
-*   [멀티 태스킹의 한계](./운영체제/멀티%20태스킹의%20한계.md)
-*   [RAID 기술](./운영체제/RAID%20기술.md)
-*   [연속 메모리 할당 기법](./운영체제/연속%20메모리%20할당%20기법.md)
-*   [페이지 교체 알고리즘](./운영체제/페이지%20교체%20알고리즘.md)
-*   [동시성 문제 중 경쟁 상태 해결](./운영체제/동시성%20문제%20중%20경쟁%20상태%20해결.md)
-*   [우아한 종료(Graceful Shutdown)](./운영체제/우아한%20종료(Graceful%20Shutdown).md)
-
-### [프로그래밍 (Programming)](./프로그래밍)
-*   [객체 지향 프로그래밍(OOP)](./프로그래밍/객체%20지향%20프로그래밍(OOP).md)
-*   [함수형 프로그래밍](./프로그래밍/함수형%20프로그래밍.md)
-*   [자바 프로그램 실행 흐름](./프로그래밍/자바%20프로그램%20실행%20흐름.md)
-*   [클래스 정보(JAVA)](./프로그래밍/클래스%20정보(JAVA).md)
-*   [자바 제네릭(공변-반공변-무공변)](./프로그래밍/자바%20제네릭(공변-반공변-무공변).md)
-*   [GC 알고리즘](./프로그래밍/GC%20알고리즘.md)
-*   [Thread-Safe](./프로그래밍/Thread-Safe.md)
-*   [ThreadLocal](./프로그래밍/ThreadLocal.md)
-*   [Thread Pool 포화 정책](./프로그래밍/Thread%20Pool%20포화%20정책.md)
-*   [String 객체](./프로그래밍/String%20객체.md)
-*   [자바 String 변환(Casting vs valueOf)](./프로그래밍/자바%20String%20변환(Casting%20vs%20valueOf).md)
-*   [JCF 초기 용량 설정](./프로그래밍/JCF%20초기%20용량%20설정.md)
-*   [try-with-resources](./프로그래밍/try-with-resources.md)
-
-### [네트워크 (Network)](./네트워크)
-*   [DNS(Domain Name System)](./네트워크/DNS(Domain%20Name%20System).md)
-*   [CDN(Content Delivery Network)](./네트워크/CDN(Content%20Delivery%20Network).md)
-*   [NAT 기능](./네트워크/NAT%20기능.md)
-*   [클래스풀 IP 주소 체계](./네트워크/클래스풀%20IP%20주소%20체계.md)
-*   [정적 및 동적 IP 주소 할당](./네트워크/정적%20및%20동적%20IP%20주소%20할당.md)
-*   [Keep-Alive](./네트워크/Keep-Alive.md)
-*   [교환 방식(회선-패킷)](./네트워크/교환%20방식(회선-패킷).md)
-
-### [자료구조 (Data Structure)](./자료구조)
-*   [연결 리스트(Linked List)](./자료구조/연결%20리스트(Linked%20List).md)
-*   [이진 트리](./자료구조/이진%20트리.md)
-*   [트라이(Trie)](./자료구조/트라이(Trie).md)
-*   [시간-공간 복잡도](./자료구조/시간-공간%20복잡도.md)
-
-### [AI](./AI)
-*   [RAG(검색 증강 생성)](./AI/RAG(검색%20증강%20생성).md)
-*   [MCP(Model Context Protocol)](./AI/MCP(Model%20Context%20Protocol).md)
-*   [LLM 토큰(token)](./AI/LLM%20토큰(token).md)
-*   [함수 호출(Tool Use)](./AI/함수%20호출(Tool%20Use).md)
+향후에는 학습 기록과 복습 주기, 문서 간 연결을 추가해 지속적으로 활용할 수 있는 개인 CS 학습 환경으로 발전시키는 것을 목표로 합니다.

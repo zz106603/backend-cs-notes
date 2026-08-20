@@ -85,3 +85,30 @@ export interface RagAnswerResponse {
   estimatedCostUsd: number
   sources: RagAnswerSource[]
 }
+
+export type RagIndexingAction = 'NEW' | 'UPDATED' | 'UNCHANGED' | 'DELETED'
+
+export interface RagIndexingDocumentResult {
+  documentId: string
+  documentTitle: string
+  documentPath: string
+  action: RagIndexingAction
+  chunkCount: number
+  embeddedChunkCount: number
+  reusedChunkCount: number
+  embeddingCharacterCount: number
+}
+
+export interface RagIndexingResult {
+  dryRun: boolean
+  embeddingModel: string
+  documentCount: number
+  changedDocumentCount: number
+  unchangedDocumentCount: number
+  chunkCount: number
+  embeddedChunkCount: number
+  reusedChunkCount: number
+  deletedDocumentCount: number
+  embeddingCharacterCount: number
+  documents: RagIndexingDocumentResult[]
+}

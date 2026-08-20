@@ -17,5 +17,10 @@ public interface ChunkVectorStore {
 
     Set<String> findIndexedDocumentIds();
 
+    /** 현재 파일과 저장된 Chunk 구성을 비교해 불필요한 문서 교체도 건너뛸 수 있게 한다. */
+    default Map<String, IndexedDocumentState> findIndexedDocumentStates() {
+        return Map.of();
+    }
+
     List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore);
 }
