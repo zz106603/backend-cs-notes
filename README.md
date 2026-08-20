@@ -88,6 +88,8 @@ Invoke-RestMethod -Method Post "http://localhost:8080/api/rag/index?dryRun=false
 
 기존 문서의 같은 본문 해시와 모델로 저장된 벡터는 재사용하고 새 청크만 OpenAI에 요청합니다. 기본 방어 한도는 문서 200개, 문서당 청크 200개, 실행당 신규 임베딩 입력 500,000자이며 각각 `RAG_INDEXING_MAX_DOCUMENTS`, `RAG_INDEXING_MAX_CHUNKS_PER_DOCUMENT`, `RAG_INDEXING_MAX_CHARACTERS_PER_RUN`으로 더 낮출 수 있습니다. 한도를 넘으면 OpenAI 호출 전에 요청을 중단하고, 동시에 두 색인을 실행하는 것도 차단합니다.
 
+프론트엔드 사이드바의 `문서 색인` 화면에서도 같은 작업을 수행할 수 있습니다. `색인 상태 확인`은 OpenAI를 호출하지 않는 dry-run이며 신규·수정·삭제 문서, 신규 임베딩 Chunk, 재사용 Chunk와 입력 문자 수를 문서별로 표시합니다. 내용을 확인하고 `변경 사항 색인`을 누른 경우에만 확인 창을 거쳐 실제 색인을 실행합니다. 현재 문서의 제목·경로·태그·Chunk 해시·섹션 구조·임베딩 모델이 저장 상태와 모두 같으면 OpenAI 호출뿐 아니라 PostgreSQL 문서 교체도 건너뜁니다.
+
 저장 결과는 Docker의 PostgreSQL 안 `document_chunk` 테이블에서 확인할 수 있습니다.
 
 ```powershell

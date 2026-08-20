@@ -8,6 +8,7 @@ const DocumentPage = lazy(() => import('./pages/DocumentPage').then((module) => 
 const DocumentEditorPage = lazy(() => import('./pages/DocumentEditorPage').then((module) => ({ default: module.DocumentEditorPage })))
 const TrashPage = lazy(() => import('./pages/TrashPage').then((module) => ({ default: module.TrashPage })))
 const RagAnswerPage = lazy(() => import('./pages/RagAnswerPage').then((module) => ({ default: module.RagAnswerPage })))
+const RagIndexingPage = lazy(() => import('./pages/RagIndexingPage').then((module) => ({ default: module.RagIndexingPage })))
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="/notes/:documentId" element={<DocumentPage />} />
             <Route path="/trash" element={<TrashPage />} />
             <Route path="/ask" element={<RagAnswerPage />} />
+            <Route path="/indexing" element={<RagIndexingPage />} />
             <Route path="*" element={<Navigate to="/notes" replace />} />
           </Routes>
         </Suspense>

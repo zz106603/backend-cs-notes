@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Archive, Boxes, ChevronRight, Database, FolderClosed, MessageCircleQuestion, Network, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
+import { Archive, Boxes, ChevronRight, Database, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -57,6 +57,15 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
       </NavLink>
 
       <span className="nav-label nav-label--manage">MANAGE</span>
+      <NavLink
+        to="/indexing"
+        className={({ isActive }) => `nav-item ${isActive ? 'nav-item--active' : ''}`}
+        onClick={onNavigate}
+      >
+        <span className="nav-item__icon"><RefreshCw size={17} /></span>
+        <span>문서 색인</span>
+        <ChevronRight className="nav-item__chevron" size={15} />
+      </NavLink>
       <NavLink
         to="/trash"
         className={({ isActive }) => `nav-item ${isActive ? 'nav-item--active' : ''}`}

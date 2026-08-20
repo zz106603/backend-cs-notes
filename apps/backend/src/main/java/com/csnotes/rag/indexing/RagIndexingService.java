@@ -10,6 +10,7 @@ import com.csnotes.rag.embedding.EmbeddingProvider;
 import com.csnotes.rag.embedding.EmbeddingVector;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.persistence.EmbeddedChunk;
+import com.csnotes.rag.persistence.IndexedDocumentState;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -66,7 +67,9 @@ public final class RagIndexingService {
                 "Document count exceeds rag.indexing.max-documents: " + summaries.size());
 
         Set<String> currentDocumentIds = new HashSet<>();
+        Map<String, IndexedDocumentState> indexedDocuments = vectorStore.findIndexedDocumentStates();
         List<IndexPlan> plans = new ArrayList<>();
+        List<RagIndexingDocumentResult> documentResults = new ArrayList<>();
         int chunkCount = 0;
         int reusedCount = 0;
         long embeddingCharacters = 0;
@@ -81,31 +84,87 @@ public final class RagIndexingService {
             enforceLimit(chunks.size() <= maxChunksPerDocument,
                     "Chunk count exceeds rag.indexing.max-chunks-per-document: " + detail.path());
 
-            Set<String> hashes = chunks.stream().map(DocumentChunk::contentHash).collect(java.util.stream.Collectors.toSet());
-            Map<String, float[]> reusable = vectorStore.findReusableEmbeddings(
-                    embeddingProvider.modelName(), hashes
-            );
-            List<DocumentChunk> missing = chunks.stream()
-                    .filter(chunk -> !reusable.containsKey(chunk.contentHash()))
-                    .toList();
+            IndexedDocumentState indexed = indexedDocuments.get(detail.id());
+            String action = indexed == null ? "NEW" : matches(indexed, detail, chunks) ? "UNCHANGED" : "UPDATED";
+            Map<String, float[]> reusable;
+            List<DocumentChunk> missing;
+            if (action.equals("UNCHANGED")) {
+                reusable = Map.of();
+                missing = List.of();
+            } else {
+                Set<String> hashes = chunks.stream().map(DocumentChunk::contentHash)
+                        .collect(java.util.stream.Collectors.toSet());
+                reusable = vectorStore.findReusableEmbeddings(embeddingProvider.modelName(), hashes);
+                missing = chunks.stream()
+                        .filter(chunk -> !reusable.containsKey(chunk.contentHash()))
+                        .toList();
+            }
             long missingCharacters = missing.stream().mapToLong(chunk -> chunk.content().length()).sum();
+            int documentReusedCount = action.equals("UNCHANGED") ? chunks.size() : chunks.size() - missing.size();
 
             chunkCount += chunks.size();
-            reusedCount += chunks.size() - missing.size();
+            reusedCount += documentReusedCount;
             embeddingCharacters += missingCharacters;
             enforceLimit(embeddingCharacters <= maxCharactersPerRun,
                     "Embedding input exceeds rag.indexing.max-characters-per-run: " + embeddingCharacters);
-            plans.add(new IndexPlan(detail.id(), chunks, reusable, missing));
+            plans.add(new IndexPlan(detail.id(), chunks, reusable, missing, action));
+            documentResults.add(new RagIndexingDocumentResult(
+                    detail.id(), detail.title(), detail.path(), action, chunks.size(), missing.size(),
+                    documentReusedCount, missingCharacters
+            ));
         }
 
         Set<String> deleted = new HashSet<>(vectorStore.findIndexedDocumentIds());
         deleted.removeAll(currentDocumentIds);
+        for (String deletedDocumentId : deleted) {
+            IndexedDocumentState state = indexedDocuments.get(deletedDocumentId);
+            documentResults.add(new RagIndexingDocumentResult(
+                    deletedDocumentId,
+                    state == null ? "삭제된 문서" : state.documentTitle(),
+                    state == null ? "" : state.documentPath(),
+                    "DELETED",
+                    state == null ? 0 : state.chunks().size(),
+                    0, 0, 0
+            ));
+        }
         if (!dryRun) {
-            for (IndexPlan plan : plans) execute(plan);
+            plans.stream().filter(plan -> !plan.action().equals("UNCHANGED")).forEach(this::execute);
             deleted.forEach(vectorStore::deleteDocument);
         }
-        return new RagIndexingResult(dryRun, summaries.size(), chunkCount,
-                chunkCount - reusedCount, reusedCount, deleted.size(), embeddingCharacters);
+        int changedDocumentCount = (int) documentResults.stream()
+                .filter(document -> !document.action().equals("UNCHANGED"))
+                .count();
+        int unchangedDocumentCount = (int) documentResults.stream()
+                .filter(document -> document.action().equals("UNCHANGED"))
+                .count();
+        return new RagIndexingResult(dryRun, embeddingProvider.modelName(), summaries.size(),
+                changedDocumentCount, unchangedDocumentCount,
+                chunkCount, chunkCount - reusedCount, reusedCount, deleted.size(), embeddingCharacters,
+                List.copyOf(documentResults));
+    }
+
+    private boolean matches(
+            IndexedDocumentState indexed,
+            DocumentModels.DocumentDetailResponse detail,
+            List<DocumentChunk> chunks
+    ) {
+        if (!indexed.documentTitle().equals(detail.title())
+                || !indexed.documentPath().equals(detail.path())
+                || !indexed.tags().equals(detail.tags())
+                || !indexed.embeddingModel().equals(embeddingProvider.modelName())
+                || indexed.chunks().size() != chunks.size()) {
+            return false;
+        }
+        for (int index = 0; index < chunks.size(); index++) {
+            DocumentChunk chunk = chunks.get(index);
+            IndexedDocumentState.IndexedChunkState stored = indexed.chunks().get(index);
+            if (stored.sequence() != chunk.sequence()
+                    || !stored.contentHash().equals(chunk.contentHash())
+                    || !stored.sectionPath().equals(chunk.sectionPath())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void execute(IndexPlan plan) {
@@ -136,7 +195,8 @@ public final class RagIndexingService {
             String documentId,
             List<DocumentChunk> chunks,
             Map<String, float[]> reusable,
-            List<DocumentChunk> missing
+            List<DocumentChunk> missing,
+            String action
     ) {
     }
 }

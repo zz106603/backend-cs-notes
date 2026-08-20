@@ -10,6 +10,7 @@ import com.csnotes.rag.embedding.EmbeddingVector;
 import com.csnotes.rag.persistence.ChunkSearchResult;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.persistence.EmbeddedChunk;
+import com.csnotes.rag.persistence.IndexedDocumentState;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -90,6 +91,53 @@ class RagIndexingServiceTest {
         assertThat(store.replaced).isEmpty();
     }
 
+    @Test
+    void 문서_메타데이터와_청크가_같으면_DB_교체도_건너뛴다() {
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        DocumentService documents = documentService("변경되지 않은 본문입니다.");
+        var detail = documents.findDocument("doc-1").orElseThrow();
+        var chunk = new HeadingAwareMarkdownChunker(2000).chunk(new com.csnotes.rag.chunk.ChunkSourceDocument(
+                detail.id(), detail.title(), detail.path(), detail.tags(), detail.content())).getFirst();
+        store.indexedDocumentIds.add(detail.id());
+        store.indexedStates.put(detail.id(), indexedState(detail, chunk, provider.modelName()));
+        RagIndexingService service = service(documents, provider, store, 10_000);
+
+        RagIndexingResult result = service.synchronize(false);
+
+        assertThat(result.changedDocumentCount()).isZero();
+        assertThat(result.unchangedDocumentCount()).isEqualTo(1);
+        assertThat(result.documents()).singleElement().extracting(RagIndexingDocumentResult::action)
+                .isEqualTo("UNCHANGED");
+        assertThat(provider.inputs).isEmpty();
+        assertThat(store.replaced).isEmpty();
+    }
+
+    @Test
+    void 미리보기는_신규_수정_삭제_문서를_문서별로_구분한다() {
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        DocumentService documents = documentService("수정된 본문입니다.");
+        var detail = documents.findDocument("doc-1").orElseThrow();
+        var oldChunk = new HeadingAwareMarkdownChunker(2000).chunk(new com.csnotes.rag.chunk.ChunkSourceDocument(
+                detail.id(), detail.title(), detail.path(), detail.tags(), "수정 전 본문입니다.")).getFirst();
+        store.indexedDocumentIds.addAll(Set.of("doc-1", "deleted-doc"));
+        store.indexedStates.put("doc-1", indexedState(detail, oldChunk, provider.modelName()));
+        store.indexedStates.put("deleted-doc", new IndexedDocumentState(
+                "deleted-doc", "삭제 문서", "백엔드/삭제.md", List.of(), provider.modelName(),
+                List.of(new IndexedDocumentState.IndexedChunkState(0, "b".repeat(64), List.of()))));
+        RagIndexingService service = service(documents, provider, store, 10_000);
+
+        RagIndexingResult result = service.synchronize(true);
+
+        assertThat(result.changedDocumentCount()).isEqualTo(2);
+        assertThat(result.documents()).extracting(RagIndexingDocumentResult::action)
+                .containsExactly("UPDATED", "DELETED");
+        assertThat(result.documents().get(1).documentPath()).isEqualTo("백엔드/삭제.md");
+        assertThat(provider.inputs).isEmpty();
+        assertThat(store.deleted).isEmpty();
+    }
+
     private RagIndexingService service(
             DocumentService documentService,
             RecordingEmbeddingProvider provider,
@@ -111,6 +159,18 @@ class RagIndexingServiceTest {
         return service;
     }
 
+    private IndexedDocumentState indexedState(
+            DocumentModels.DocumentDetailResponse detail,
+            com.csnotes.rag.chunk.DocumentChunk chunk,
+            String model
+    ) {
+        return new IndexedDocumentState(
+                detail.id(), detail.title(), detail.path(), detail.tags(), model,
+                List.of(new IndexedDocumentState.IndexedChunkState(
+                        chunk.sequence(), chunk.contentHash(), chunk.sectionPath()))
+        );
+    }
+
     private static final class RecordingEmbeddingProvider implements EmbeddingProvider {
         private final List<EmbeddingInput> inputs = new ArrayList<>();
 
@@ -128,6 +188,7 @@ class RagIndexingServiceTest {
     private static final class RecordingVectorStore implements ChunkVectorStore {
         private final Map<String, float[]> reusable = new HashMap<>();
         private final Set<String> indexedDocumentIds = new HashSet<>();
+        private final Map<String, IndexedDocumentState> indexedStates = new HashMap<>();
         private final List<List<EmbeddedChunk>> replaced = new ArrayList<>();
         private final List<String> deleted = new ArrayList<>();
 
@@ -137,6 +198,7 @@ class RagIndexingServiceTest {
             return Map.copyOf(reusable);
         }
         @Override public Set<String> findIndexedDocumentIds() { return Set.copyOf(indexedDocumentIds); }
+        @Override public Map<String, IndexedDocumentState> findIndexedDocumentStates() { return Map.copyOf(indexedStates); }
         @Override public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) { return List.of(); }
     }
 }
