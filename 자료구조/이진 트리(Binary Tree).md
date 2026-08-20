@@ -1,4 +1,8 @@
-# 이진 트리 (Binary Tree)
+---
+title: "이진 트리(Binary Tree)"
+tags:
+---
+# 이진 트리(Binary Tree)
 
 각 노드가 **최대 2개의 자식 노드(왼쪽, 오른쪽)** 만 가질 수 있는 트리 구조
 
