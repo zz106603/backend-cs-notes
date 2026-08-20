@@ -74,6 +74,7 @@ export interface RagAnswerUsage {
 }
 
 export interface RagAnswerResponse {
+  requestId: string
   question: string
   answer: string
   answerModel: string
@@ -81,5 +82,6 @@ export interface RagAnswerResponse {
   cached: boolean
   contextCharacters: number
   usage: RagAnswerUsage
+  estimatedCostUsd: number
   sources: RagAnswerSource[]
 }

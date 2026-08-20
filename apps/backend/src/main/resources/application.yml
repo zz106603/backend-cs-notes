@@ -62,3 +62,7 @@ rag:
     default-minimum-score: ${RAG_ANSWER_DEFAULT_MINIMUM_SCORE:0.3}
     cache-ttl: ${RAG_ANSWER_CACHE_TTL:10m}
     cache-max-entries: ${RAG_ANSWER_CACHE_MAX_ENTRIES:100}
+    input-price-per-million-usd: ${RAG_ANSWER_INPUT_PRICE_PER_MILLION_USD:0.40}
+    output-price-per-million-usd: ${RAG_ANSWER_OUTPUT_PRICE_PER_MILLION_USD:1.60}
+    daily-cost-limit-usd: ${RAG_ANSWER_DAILY_COST_LIMIT_USD:0.25}
+    budget-zone-id: ${RAG_ANSWER_BUDGET_ZONE_ID:Asia/Seoul}

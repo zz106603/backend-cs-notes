@@ -15,8 +15,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.support.RetryTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.ZoneId;
 
 @Configuration
 @Conditional(OpenAiApiKeyCondition.class)
@@ -63,6 +67,26 @@ public class RagAnswerConfiguration {
     }
 
     @Bean
+    RagAnswerUsageStore ragAnswerUsageStore(JdbcTemplate ragJdbcTemplate) {
+        return new JdbcRagAnswerUsageStore(ragJdbcTemplate);
+    }
+
+    @Bean
+    RagAnswerCostPolicy ragAnswerCostPolicy(
+            @Value("${rag.answer.input-price-per-million-usd}") BigDecimal inputPrice,
+            @Value("${rag.answer.output-price-per-million-usd}") BigDecimal outputPrice,
+            @Value("${rag.answer.daily-cost-limit-usd}") BigDecimal dailyLimit,
+            @Value("${rag.answer.max-output-tokens}") int maxOutputTokens
+    ) {
+        return new RagAnswerCostPolicy(inputPrice, outputPrice, dailyLimit, maxOutputTokens);
+    }
+
+    @Bean
+    Clock ragAnswerClock(@Value("${rag.answer.budget-zone-id}") ZoneId zoneId) {
+        return Clock.system(zoneId);
+    }
+
+    @Bean
     RagAnswerService ragAnswerService(
             RagSearchService searchService,
             RagAnswerGenerator answerGenerator,
@@ -71,9 +95,13 @@ public class RagAnswerConfiguration {
             @Value("${rag.answer.max-context-characters}") int maxContextCharacters,
             @Value("${rag.answer.default-minimum-score}") double defaultMinimumScore,
             @Value("${rag.answer.cache-ttl}") Duration cacheTtl,
-            @Value("${rag.answer.cache-max-entries}") int cacheMaxEntries
+            @Value("${rag.answer.cache-max-entries}") int cacheMaxEntries,
+            RagAnswerUsageStore usageStore,
+            RagAnswerCostPolicy costPolicy,
+            Clock ragAnswerClock
     ) {
         return new RagAnswerService(searchService, answerGenerator, defaultSourceLimit, maxSourceLimit,
-                maxContextCharacters, defaultMinimumScore, cacheTtl, cacheMaxEntries);
+                maxContextCharacters, defaultMinimumScore, cacheTtl, cacheMaxEntries,
+                usageStore, costPolicy, ragAnswerClock);
     }
 }

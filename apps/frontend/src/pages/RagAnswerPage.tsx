@@ -54,7 +54,7 @@ export function RagAnswerPage() {
       )}
 
       {answer.isPending && (
-        <section className="rag-answer-loading">
+        <section className="rag-answer-loading" aria-live="polite" aria-busy="true">
           <span className="loader" />
           <div><strong>관련 문서를 찾고 있습니다</strong><p>근거를 구성한 뒤 답변을 생성합니다.</p></div>
         </section>
@@ -78,6 +78,8 @@ export function RagAnswerPage() {
               {answer.data.usage.totalTokens != null && (
                 <span>Total {answer.data.usage.totalTokens.toLocaleString()} tokens</span>
               )}
+              <span>예상 비용 ${answer.data.estimatedCostUsd.toFixed(6)}</span>
+              <span title={answer.data.requestId}>요청 {answer.data.requestId.slice(0, 8)}</span>
             </footer>
           </article>
 

@@ -156,6 +156,31 @@ $env:OPENAI_API_KEY = "발급받은 API 키"
 
 OpenAI의 텍스트 생성 지침 구성은 [공식 OpenAI 텍스트 생성 문서](https://developers.openai.com/api/docs/guides/text)를 참고했습니다.
 
+### RAG 답변 비용과 실행 기록
+
+M4.9부터 답변 요청의 상태, 토큰 수, 예상 비용, 소요 시간과 출처 수를 PostgreSQL의 `rag_answer_usage`에 기록합니다. 질문 원문은 저장하지 않고 SHA-256 해시만 보관합니다. 화면에는 요청 ID 앞 8자리와 해당 응답의 예상 비용을 표시합니다.
+
+기본 일일 예상 비용 한도는 `$0.25`입니다. 오늘 누적 비용과 다음 호출의 보수적인 최대 예상 비용을 합산해 한도를 넘으면 OpenAI 호출 전에 `429`로 차단합니다. 가격이나 한도는 모델 가격 변경과 사용 목적에 맞게 직접 조정해야 합니다.
+
+```powershell
+$env:RAG_ANSWER_DAILY_COST_LIMIT_USD = "0.25"
+$env:RAG_ANSWER_INPUT_PRICE_PER_MILLION_USD = "0.40"
+$env:RAG_ANSWER_OUTPUT_PRICE_PER_MILLION_USD = "1.60"
+$env:RAG_ANSWER_BUDGET_ZONE_ID = "Asia/Seoul"
+```
+
+오늘 실행 기록은 PostgreSQL에서 다음과 같이 확인할 수 있습니다.
+
+```sql
+SELECT request_id, status, model, prompt_tokens, completion_tokens,
+       estimated_cost_usd, source_count, elapsed_ms, created_at
+FROM rag_answer_usage
+WHERE created_at >= CURRENT_DATE
+ORDER BY created_at DESC;
+```
+
+`estimated_cost_usd`는 설정한 토큰 단가로 계산한 참고값이며 최종 청구 금액은 OpenAI 사용량 대시보드가 기준입니다. 캐시 응답과 검색 근거가 없는 응답은 답변 모델 비용을 `$0`으로 기록합니다. 실패 응답은 서버가 실제 처리했을 가능성까지 고려해 보수적인 최대 예상 비용으로 기록합니다.
+
 ## 목차 (Categories)
 
 ### [백엔드 (Backend)](./백엔드)
