@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Archive, Boxes, ChevronRight, Database, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
+import { Archive, Boxes, ChevronRight, Database, FilePlus2, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -13,13 +13,25 @@ const CATEGORY_ICONS: Record<string, ReactNode> = {
   Archive: <Archive size={17} />,
 }
 
-export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
+export function Sidebar({ onNavigate, onOpenSearch }: { onNavigate: () => void; onOpenSearch: () => void }) {
   const { data: categories, isLoading } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
   const [searchParams] = useSearchParams()
   const selectedCategory = searchParams.get('category')
 
   return (
     <nav className="sidebar-nav" aria-label="문서 카테고리">
+      <div className="sidebar-actions">
+        <NavLink to="/notes/new" className="sidebar-create-button" onClick={onNavigate}>
+          <FilePlus2 size={16} />
+          <span>새 문서</span>
+        </NavLink>
+        <button className="sidebar-search-button" type="button" aria-haspopup="dialog" onClick={onOpenSearch}>
+          <Search size={16} />
+          <span>문서 검색</span>
+          <kbd>/</kbd>
+        </button>
+      </div>
+
       <span className="nav-label">LIBRARY</span>
       <NavLink
         to="/notes"
@@ -75,11 +87,6 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
         <span>휴지통</span>
         <ChevronRight className="nav-item__chevron" size={15} />
       </NavLink>
-
-      <div className="nav-search-note">
-        <Search size={15} />
-        <span>폴더를 선택하거나 제목과 경로에서 원하는 문서를 찾아보세요.</span>
-      </div>
     </nav>
   )
 }

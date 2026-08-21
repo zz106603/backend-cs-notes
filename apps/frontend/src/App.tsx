@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BookOpenText, Braces, Menu, Moon, Search, Sun, X } from 'lucide-react'
+import { BookOpenText, Braces, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, X } from 'lucide-react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
+import { GlobalSearchModal } from './components/GlobalSearchModal'
 import { usePersistentState } from './hooks/usePersistentState'
 
 const DocumentListPage = lazy(() => import('./pages/DocumentListPage').then((module) => ({ default: module.DocumentListPage })))
@@ -13,6 +14,8 @@ const RagIndexingPage = lazy(() => import('./pages/RagIndexingPage').then((modul
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = usePersistentState('cs-notes-sidebar-collapsed', false)
   const preferredTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   const [theme, setTheme] = usePersistentState<'light' | 'dark'>('cs-notes-theme', preferredTheme)
 
@@ -21,8 +24,22 @@ export default function App() {
     document.documentElement.style.colorScheme = theme
   }, [theme])
 
+  useEffect(() => {
+    const openSearch = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const isEditing = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA' || target?.isContentEditable
+      if (event.key === '/' && !isEditing) {
+        event.preventDefault()
+        setSidebarOpen(false)
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', openSearch)
+    return () => window.removeEventListener('keydown', openSearch)
+  }, [])
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`}>
       <header className="mobile-header">
         <Link to="/notes" className="mobile-brand" onClick={() => setSidebarOpen(false)}>
           <span className="brand-mark"><Braces size={18} /></span>
@@ -39,6 +56,15 @@ export default function App() {
       </header>
 
       <aside className={`sidebar ${sidebarOpen ? 'sidebar--open' : ''}`}>
+        <button
+          className="sidebar-collapse-button"
+          type="button"
+          aria-label="사이드바 숨기기"
+          title="사이드바 숨기기"
+          onClick={() => setSidebarCollapsed(true)}
+        >
+          <PanelLeftClose size={17} />
+        </button>
         <div className="brand-block">
           <Link to="/notes" className="brand" onClick={() => setSidebarOpen(false)}>
             <span className="brand-mark"><Braces size={20} /></span>
@@ -50,7 +76,13 @@ export default function App() {
           <p>흩어진 지식을 연결하고,<br />나만의 언어로 정리합니다.</p>
         </div>
 
-        <Sidebar onNavigate={() => setSidebarOpen(false)} />
+        <Sidebar
+          onNavigate={() => setSidebarOpen(false)}
+          onOpenSearch={() => {
+            setSidebarOpen(false)
+            setSearchOpen(true)
+          }}
+        />
 
         <div className="sidebar-footer">
           <div className="sidebar-footer__icon"><BookOpenText size={17} /></div>
@@ -72,6 +104,18 @@ export default function App() {
 
       {sidebarOpen && <button className="sidebar-backdrop" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)} />}
 
+      {sidebarCollapsed && (
+        <button
+          className="sidebar-expand-button"
+          type="button"
+          aria-label="사이드바 열기"
+          title="사이드바 열기"
+          onClick={() => setSidebarCollapsed(false)}
+        >
+          <PanelLeftOpen size={18} />
+        </button>
+      )}
+
       <main className="main-content">
         <Suspense fallback={<div className="page"><div className="state-panel"><span className="loader" /><p>화면을 준비하는 중</p></div></div>}>
           <Routes>
@@ -91,6 +135,8 @@ export default function App() {
       <div className="keyboard-hint" aria-hidden="true">
         <Search size={13} /> <span>문서 검색</span><kbd>/</kbd>
       </div>
+
+      {searchOpen && <GlobalSearchModal onClose={() => setSearchOpen(false)} />}
     </div>
   )
 }
