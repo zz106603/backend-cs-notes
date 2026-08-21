@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { Archive, Boxes, ChevronRight, Database, FilePlus2, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
+import { Archive, Boxes, ChevronDown, ChevronRight, Database, FilePlus2, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
+import { usePersistentState } from '../hooks/usePersistentState'
 import type { Category } from '../types'
 
 const CATEGORY_ICONS: Record<string, ReactNode> = {
@@ -17,6 +18,13 @@ export function Sidebar({ onNavigate, onOpenSearch }: { onNavigate: () => void; 
   const { data: categories, isLoading } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
   const [searchParams] = useSearchParams()
   const selectedCategory = searchParams.get('category')
+  const [collapsedCategories, setCollapsedCategories] = usePersistentState<string[]>('cs-notes-collapsed-categories', [])
+
+  const toggleCategory = (path: string) => {
+    setCollapsedCategories(collapsedCategories.includes(path)
+      ? collapsedCategories.filter((collapsedPath) => collapsedPath !== path)
+      : [...collapsedCategories, path])
+  }
 
   return (
     <nav className="sidebar-nav" aria-label="문서 카테고리">
@@ -51,6 +59,8 @@ export function Sidebar({ onNavigate, onOpenSearch }: { onNavigate: () => void; 
             category={category}
             depth={0}
             selectedCategory={selectedCategory}
+            collapsedCategories={collapsedCategories}
+            onToggle={toggleCategory}
             onNavigate={onNavigate}
             key={category.path}
           />
@@ -95,40 +105,68 @@ function CategoryTreeItem({
   category,
   depth,
   selectedCategory,
+  collapsedCategories,
+  onToggle,
   onNavigate,
 }: {
   category: Category
   depth: number
   selectedCategory: string | null
+  collapsedCategories: string[]
+  onToggle: (path: string) => void
   onNavigate: () => void
 }) {
   const style = { '--category-depth': depth } as CSSProperties
+  const hasChildren = category.children.length > 0
+  const isCollapsed = collapsedCategories.includes(category.path)
 
   return (
     <div className="category-tree__branch">
-      <NavLink
-        to={`/notes?category=${encodeURIComponent(category.path)}`}
-        className={`nav-item category-tree__item ${depth > 0 ? 'nav-item--nested' : ''} ${selectedCategory === category.path ? 'nav-item--active' : ''}`}
-        style={style}
-        onClick={onNavigate}
-      >
-        <span className="nav-item__icon">
-          {depth === 0 ? CATEGORY_ICONS[category.name] ?? <Boxes size={17} /> : <FolderClosed size={14} />}
-        </span>
-        <span title={category.path}>{category.name}</span>
-        <small>{category.documentCount}</small>
-      </NavLink>
-      {category.children.length > 0 && (
-        <div className="category-tree__children">
-          {category.children.map((child) => (
-            <CategoryTreeItem
-              category={child}
-              depth={depth + 1}
-              selectedCategory={selectedCategory}
-              onNavigate={onNavigate}
-              key={child.path}
-            />
-          ))}
+      <div className="category-tree__row">
+        <NavLink
+          to={`/notes?category=${encodeURIComponent(category.path)}`}
+          className={`nav-item category-tree__item ${depth > 0 ? 'nav-item--nested' : ''} ${selectedCategory === category.path ? 'nav-item--active' : ''}`}
+          style={style}
+          onClick={onNavigate}
+        >
+          <span className="nav-item__icon">
+            {depth === 0 ? CATEGORY_ICONS[category.name] ?? <Boxes size={17} /> : <FolderClosed size={14} />}
+          </span>
+          <span title={category.path}>{category.name}</span>
+          <small>{category.documentCount}</small>
+        </NavLink>
+        {hasChildren && (
+          <button
+            className="category-tree__toggle"
+            type="button"
+            aria-label={`${category.name} 하위 폴더 ${isCollapsed ? '펼치기' : '접기'}`}
+            aria-expanded={!isCollapsed}
+            title={isCollapsed ? '하위 폴더 펼치기' : '하위 폴더 접기'}
+            onClick={() => onToggle(category.path)}
+          >
+            {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          </button>
+        )}
+      </div>
+      {hasChildren && (
+        <div
+          className={`category-tree__children ${isCollapsed ? 'category-tree__children--collapsed' : ''}`}
+          aria-hidden={isCollapsed}
+          inert={isCollapsed}
+        >
+          <div className="category-tree__children-inner">
+            {category.children.map((child) => (
+              <CategoryTreeItem
+                category={child}
+                depth={depth + 1}
+                selectedCategory={selectedCategory}
+                collapsedCategories={collapsedCategories}
+                onToggle={onToggle}
+                onNavigate={onNavigate}
+                key={child.path}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

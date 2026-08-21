@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm'
 import { api } from '../api'
 import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
+import { MarkdownTextarea } from '../components/MarkdownTextarea'
 import type { Category, DocumentDetail } from '../types'
 
 function flattenCategories(categories: Category[]): Category[] {
@@ -158,10 +159,7 @@ function DocumentEditorForm({ document }: { document?: DocumentDetail }) {
 
         <div className={`editor-panes editor-panes--${mode}`}>
           {mode !== 'preview' && (
-            <label className="editor-input-pane">
-              <span className="sr-only">Markdown 내용</span>
-              <textarea value={content} onChange={(event) => setContent(event.target.value)} spellCheck={false} />
-            </label>
+            <MarkdownTextarea value={content} onChange={setContent} />
           )}
           {mode !== 'write' && (
             <div className="editor-preview-pane">
