@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowRight, ArrowUpRight, BrainCircuit, FilePlus2, FileText, Grid2X2, List, ListFilter, Search, Sparkles } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
@@ -50,7 +50,6 @@ export function DocumentListPage() {
   const [searchMode, setSearchMode] = useState<'general' | 'semantic'>('general')
   const [viewMode, setViewMode] = usePersistentState<'cards' | 'list'>('cs-notes-library-view', 'cards')
   const debouncedQuery = useDebouncedValue(query, 250)
-  const searchInput = useRef<HTMLInputElement>(null)
   const { data: documents, isLoading, error } = useQuery({
     queryKey: ['documents', category, debouncedQuery],
     queryFn: () => api.documents(category, debouncedQuery),
@@ -69,17 +68,6 @@ export function DocumentListPage() {
     event.preventDefault()
     if (searchMode === 'semantic' && query.trim()) semanticSearch.mutate(query.trim())
   }
-
-  useEffect(() => {
-    const focusSearch = (event: KeyboardEvent) => {
-      if (event.key === '/' && document.activeElement?.tagName !== 'INPUT') {
-        event.preventDefault()
-        searchInput.current?.focus()
-      }
-    }
-    window.addEventListener('keydown', focusSearch)
-    return () => window.removeEventListener('keydown', focusSearch)
-  }, [])
 
   return (
     <div className="page page--library">
@@ -112,7 +100,6 @@ export function DocumentListPage() {
         <form className={`search-box ${searchMode === 'semantic' ? 'search-box--semantic' : ''}`} onSubmit={submitSearch}>
           {searchMode === 'semantic' ? <BrainCircuit size={20} /> : <Search size={20} />}
           <input
-            ref={searchInput}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={searchMode === 'semantic' ? '의미나 개념을 문장으로 질문해 보세요' : '제목, 태그 또는 본문 검색'}
