@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import { isValidElement } from 'react'
-import type { ReactElement, ReactNode } from 'react'
+import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import { api } from '../api'
@@ -26,6 +26,7 @@ interface TableOfContentsItem {
   level: 2 | 3
   text: string
   id: string
+  line: number
 }
 
 function plainText(node: ReactNode): string {
@@ -53,7 +54,7 @@ function extractTableOfContents(markdown: string): TableOfContentsItem[] {
   const occurrences = new Map<string, number>()
   let fenced = false
   const items: TableOfContentsItem[] = []
-  markdown.split(/\r?\n/).forEach((line) => {
+  markdown.split(/\r?\n/).forEach((line, index) => {
     if (/^\s*(```|~~~)/.test(line)) {
       fenced = !fenced
       return
@@ -66,7 +67,7 @@ function extractTableOfContents(markdown: string): TableOfContentsItem[] {
       .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
       .replace(/[*_`~]/g, '')
       .trim()
-    items.push({ level: match[1].length as 2 | 3, text, id: uniqueHeadingId(text, occurrences) })
+    items.push({ level: match[1].length as 2 | 3, text, id: uniqueHeadingId(text, occurrences), line: index + 1 })
   })
   return items
 }
@@ -77,6 +78,14 @@ function formatDate(value: string) {
     month: 'long',
     day: 'numeric',
   }).format(new Date(value))
+}
+
+function moveToHeading(event: MouseEvent<HTMLAnchorElement>, id: string) {
+  const target = window.document.getElementById(id)
+  if (!target) return
+  event.preventDefault()
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${encodeURIComponent(id)}`)
 }
 
 export function DocumentPage() {
@@ -107,11 +116,11 @@ export function DocumentPage() {
   if (!document) return null
 
   const tableOfContents = extractTableOfContents(document.content)
-  const renderedHeadingOccurrences = new Map<string, number>()
+  const headingIdsByLine = new Map(tableOfContents.map((item) => [item.line, item.id]))
   const heading = (level: 2 | 3) => ({ children, node, ...props }: React.HTMLAttributes<HTMLHeadingElement> & { node?: unknown }) => {
-    void node
     const text = plainText(children)
-    const id = uniqueHeadingId(text, renderedHeadingOccurrences)
+    const line = (node as { position?: { start?: { line?: number } } } | undefined)?.position?.start?.line
+    const id = (line && headingIdsByLine.get(line)) || headingSlug(text)
     const Heading = `h${level}` as 'h2' | 'h3'
     return <Heading id={id} {...props}>{children}</Heading>
   }
@@ -197,7 +206,14 @@ export function DocumentPage() {
               <header><BookOpenText size={15} /><span>문서 목차</span></header>
               <nav aria-label="문서 목차">
                 {tableOfContents.map((item) => (
-                  <a className={item.level === 3 ? 'document-toc__item document-toc__item--nested' : 'document-toc__item'} href={`#${item.id}`} key={item.id}>{item.text}</a>
+                  <a
+                    className={item.level === 3 ? 'document-toc__item document-toc__item--nested' : 'document-toc__item'}
+                    href={`#${item.id}`}
+                    onClick={(event) => moveToHeading(event, item.id)}
+                    key={item.id}
+                  >
+                    {item.text}
+                  </a>
                 ))}
               </nav>
             </aside>

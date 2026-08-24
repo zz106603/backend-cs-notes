@@ -158,9 +158,7 @@ function DocumentEditorForm({ document }: { document?: DocumentDetail }) {
         </header>
 
         <div className={`editor-panes editor-panes--${mode}`}>
-          {mode !== 'preview' && (
-            <MarkdownTextarea value={content} onChange={setContent} />
-          )}
+          <MarkdownTextarea value={content} visible={mode !== 'preview'} onChange={setContent} />
           {mode !== 'write' && (
             <div className="editor-preview-pane">
               <div className="markdown-body">
