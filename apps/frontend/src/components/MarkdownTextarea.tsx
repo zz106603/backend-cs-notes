@@ -1,247 +1,197 @@
-import { useEffect, useRef, useState } from 'react'
-import { CheckSquare, Code2, Heading2, List, ListOrdered, Quote, Table2, Type } from 'lucide-react'
-import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
+import { Code2, Heading2, Table2 } from 'lucide-react'
+import { basicSetup, EditorView } from 'codemirror'
+import { autocompletion } from '@codemirror/autocomplete'
+import type { Completion, CompletionContext } from '@codemirror/autocomplete'
+import { markdown } from '@codemirror/lang-markdown'
+import { EditorSelection, Transaction } from '@codemirror/state'
+import { keymap } from '@codemirror/view'
 
 interface MarkdownTextareaProps {
   value: string
+  visible: boolean
   onChange: (value: string) => void
 }
 
-interface SlashCommand {
-  name: string
-  description: string
+interface MarkdownTemplate {
+  label: string
+  detail: string
   keywords: string[]
-  icon: ReactNode
-  template: string
+  text: string
   selectionStart: number
   selectionEnd?: number
 }
 
-interface SlashMatch {
-  start: number
-  end: number
-  query: string
-}
-
-const SLASH_COMMANDS: SlashCommand[] = [
-  { name: '제목 2', description: '중간 제목을 추가합니다', keywords: ['제목2', 'h2'], icon: <Heading2 size={15} />, template: '## ', selectionStart: 3 },
-  { name: '글머리 목록', description: '순서 없는 목록을 시작합니다', keywords: ['목록', '리스트'], icon: <List size={15} />, template: '- ', selectionStart: 2 },
-  { name: '번호 목록', description: '순서 있는 목록을 시작합니다', keywords: ['번호목록', '번호'], icon: <ListOrdered size={15} />, template: '1. ', selectionStart: 3 },
-  { name: '체크 목록', description: '할 일 항목을 추가합니다', keywords: ['체크', '할일'], icon: <CheckSquare size={15} />, template: '- [ ] ', selectionStart: 6 },
-  { name: '코드 블록', description: '언어를 지정할 수 있는 코드 영역입니다', keywords: ['코드', 'code'], icon: <Code2 size={15} />, template: '```text\n\n```', selectionStart: 3, selectionEnd: 7 },
-  { name: '표', description: '2열 Markdown 표를 추가합니다', keywords: ['표', 'table'], icon: <Table2 size={15} />, template: '| 제목 1 | 제목 2 |\n| --- | --- |\n| 내용 1 | 내용 2 |', selectionStart: 2, selectionEnd: 6 },
-  { name: '인용문', description: '인용 영역을 시작합니다', keywords: ['인용'], icon: <Quote size={15} />, template: '> ', selectionStart: 2 },
-  { name: '구분선', description: '내용 사이에 구분선을 추가합니다', keywords: ['구분선', '선'], icon: <Type size={15} />, template: '---\n', selectionStart: 4 },
+const MARKDOWN_TEMPLATES: MarkdownTemplate[] = [
+  { label: '제목 2', detail: '중간 제목을 추가합니다', keywords: ['제목2', 'h2'], text: '## ', selectionStart: 3 },
+  { label: '글머리 목록', detail: '순서 없는 목록을 시작합니다', keywords: ['목록', '리스트'], text: '- ', selectionStart: 2 },
+  { label: '번호 목록', detail: '순서 있는 목록을 시작합니다', keywords: ['번호목록', '번호'], text: '1. ', selectionStart: 3 },
+  { label: '체크 목록', detail: '할 일 항목을 추가합니다', keywords: ['체크', '할일'], text: '- [ ] ', selectionStart: 6 },
+  { label: '코드 블록', detail: '언어를 지정할 수 있는 코드 영역입니다', keywords: ['코드', 'code'], text: '```text\n\n```', selectionStart: 3, selectionEnd: 7 },
+  { label: '표', detail: '2열 Markdown 표를 추가합니다', keywords: ['표', 'table'], text: '| 제목 1 | 제목 2 |\n| --- | --- |\n| 내용 1 | 내용 2 |', selectionStart: 2, selectionEnd: 6 },
+  { label: '인용문', detail: '인용 영역을 시작합니다', keywords: ['인용'], text: '> ', selectionStart: 2 },
+  { label: '구분선', detail: '내용 사이에 구분선을 추가합니다', keywords: ['구분선', '선'], text: '---\n', selectionStart: 4 },
 ]
 
-function findSlashMatch(value: string, cursor: number): SlashMatch | null {
-  const lineStart = value.lastIndexOf('\n', cursor - 1) + 1
-  const line = value.slice(lineStart, cursor)
-  const match = /^\/(\S*)$/.exec(line)
-  return match ? { start: lineStart, end: cursor, query: match[1].toLowerCase() } : null
+function insertTemplate(view: EditorView, template: MarkdownTemplate, from?: number, to?: number) {
+  const selection = view.state.selection.main
+  const replaceFrom = from ?? selection.from
+  const replaceTo = to ?? selection.to
+  view.dispatch({
+    changes: { from: replaceFrom, to: replaceTo, insert: template.text },
+    selection: EditorSelection.range(
+      replaceFrom + template.selectionStart,
+      replaceFrom + (template.selectionEnd ?? template.selectionStart),
+    ),
+    userEvent: 'input',
+  })
+  view.focus()
+  return true
 }
 
-function filteredCommands(query: string) {
-  if (!query) return SLASH_COMMANDS
-  return SLASH_COMMANDS.filter((command) =>
-    command.name.replaceAll(' ', '').toLowerCase().includes(query)
-    || command.keywords.some((keyword) => keyword.includes(query)),
-  )
+function wrapSelection(view: EditorView, before: string, after: string) {
+  const selection = view.state.selection.main
+  const selectedText = view.state.sliceDoc(selection.from, selection.to)
+  view.dispatch({
+    changes: { from: selection.from, to: selection.to, insert: before + selectedText + after },
+    selection: selectedText
+      ? EditorSelection.range(selection.from + before.length, selection.from + before.length + selectedText.length)
+      : EditorSelection.cursor(selection.from + before.length),
+    userEvent: 'input',
+  })
+  view.focus()
+  return true
 }
 
-export function MarkdownTextarea({ value, onChange }: MarkdownTextareaProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const commandRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const [slashMatch, setSlashMatch] = useState<SlashMatch | null>(null)
-  const [activeCommand, setActiveCommand] = useState(0)
-  const commands = filteredCommands(slashMatch?.query ?? '')
+function insertLink(view: EditorView) {
+  const selection = view.state.selection.main
+  const selectedText = view.state.sliceDoc(selection.from, selection.to)
+  const label = selectedText || '링크 텍스트'
+  const text = `[${label}](https://)`
+  const urlStart = selection.from + label.length + 3
+  view.dispatch({
+    changes: { from: selection.from, to: selection.to, insert: text },
+    selection: selectedText
+      ? EditorSelection.range(urlStart, urlStart + 8)
+      : EditorSelection.range(selection.from + 1, selection.from + 1 + label.length),
+    userEvent: 'input',
+  })
+  view.focus()
+  return true
+}
+
+function completionFor(template: MarkdownTemplate): Completion {
+  return {
+    label: template.label,
+    detail: template.detail,
+    type: 'keyword',
+    boost: 1,
+    apply(view, _completion, from, to) {
+      insertTemplate(view, template, from - 1, to)
+    },
+  }
+}
+
+function slashCommandSource(context: CompletionContext) {
+  const line = context.state.doc.lineAt(context.pos)
+  const beforeCursor = context.state.sliceDoc(line.from, context.pos)
+  const match = /^\/(\S*)$/.exec(beforeCursor)
+  if (!match) return null
+  const query = match[1].toLowerCase()
+  const templates = query
+    ? MARKDOWN_TEMPLATES.filter((template) =>
+        template.label.replaceAll(' ', '').toLowerCase().includes(query)
+        || template.keywords.some((keyword) => keyword.includes(query)),
+      )
+    : MARKDOWN_TEMPLATES
+  return {
+    from: line.from + 1,
+    options: templates.map(completionFor),
+    validFor: /^\S*$/,
+    filter: false,
+  }
+}
+
+const editorTheme = EditorView.theme({
+  '&': { height: '100%' },
+  '.cm-scroller': { minHeight: '610px' },
+  '&.cm-focused': { outline: 'none' },
+})
+
+export function MarkdownTextarea({ value, visible, onChange }: MarkdownTextareaProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<EditorView | null>(null)
+  const initialValueRef = useRef(value)
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
 
   useEffect(() => {
-    if (!slashMatch || commands.length === 0) return
-    commandRefs.current[activeCommand]?.scrollIntoView({ block: 'nearest' })
-  }, [activeCommand, commands.length, slashMatch])
-
-  const restoreSelection = (start: number, end = start) => {
-    window.requestAnimationFrame(() => {
-      textareaRef.current?.focus()
-      textareaRef.current?.setSelectionRange(start, end)
+    if (!containerRef.current) return
+    const view = new EditorView({
+      doc: initialValueRef.current,
+      parent: containerRef.current,
+      extensions: [
+        keymap.of([
+          { key: 'Mod-b', run: (currentView) => wrapSelection(currentView, '**', '**') },
+          { key: 'Mod-i', run: (currentView) => wrapSelection(currentView, '*', '*') },
+          { key: 'Mod-k', run: insertLink },
+        ]),
+        EditorView.inputHandler.of((currentView, from, to, text) => {
+          if (text !== '`' || from !== to || currentView.state.sliceDoc(Math.max(0, from - 2), from) !== '``') {
+            return false
+          }
+          currentView.dispatch({
+            changes: { from, to, insert: '`\n\n```' },
+            selection: EditorSelection.cursor(from + 2),
+            userEvent: 'input.type',
+          })
+          return true
+        }),
+        basicSetup,
+        markdown(),
+        autocompletion({ override: [slashCommandSource] }),
+        EditorView.contentAttributes.of({ 'aria-label': 'Markdown 내용' }),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) onChangeRef.current(update.state.doc.toString())
+        }),
+        editorTheme,
+      ],
     })
-  }
-
-  const replaceRange = (start: number, end: number, replacement: string, selectionStart: number, selectionEnd = selectionStart) => {
-    onChange(value.slice(0, start) + replacement + value.slice(end))
-    setSlashMatch(null)
-    restoreSelection(start + selectionStart, start + selectionEnd)
-  }
-
-  const replaceSelection = (replacement: string, selectionStart: number, selectionEnd = selectionStart) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    replaceRange(textarea.selectionStart, textarea.selectionEnd, replacement, selectionStart, selectionEnd)
-  }
-
-  const wrapSelection = (before: string, after: string) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    const selected = value.slice(textarea.selectionStart, textarea.selectionEnd)
-    const replacement = before + selected + after
-    const selectionStart = before.length
-    const selectionEnd = selected ? before.length + selected.length : before.length
-    replaceRange(textarea.selectionStart, textarea.selectionEnd, replacement, selectionStart, selectionEnd)
-  }
-
-  const updateSlashMenu = (nextValue: string, cursor: number) => {
-    const match = findSlashMatch(nextValue, cursor)
-    setSlashMatch(match)
-    setActiveCommand(0)
-  }
-
-  const changeContent = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    const nextValue = event.target.value
-    onChange(nextValue)
-    updateSlashMenu(nextValue, event.target.selectionStart)
-  }
-
-  const applyCommand = (command: SlashCommand) => {
-    if (!slashMatch) return
-    replaceRange(slashMatch.start, slashMatch.end, command.template, command.selectionStart, command.selectionEnd)
-  }
-
-  const continueList = (cursor: number) => {
-    const lineStart = value.lastIndexOf('\n', cursor - 1) + 1
-    const currentLine = value.slice(lineStart, cursor)
-    const task = /^(\s*[-*+]\s+\[[ xX]\]\s+)(.*)$/.exec(currentLine)
-    const bullet = /^(\s*[-*+]\s+)(.*)$/.exec(currentLine)
-    const ordered = /^(\s*)(\d+)([.)]\s+)(.*)$/.exec(currentLine)
-    const match = task ?? bullet
-
-    if (match) {
-      if (!match[2]) {
-        replaceRange(lineStart, cursor, '', 0)
-        return true
-      }
-      const prefix = task ? task[1].replace(/\[[xX]\]/, '[ ]') : match[1]
-      replaceRange(cursor, cursor, `\n${prefix}`, prefix.length + 1)
-      return true
+    viewRef.current = view
+    return () => {
+      view.destroy()
+      viewRef.current = null
     }
-    if (ordered) {
-      if (!ordered[4]) {
-        replaceRange(lineStart, cursor, '', 0)
-        return true
-      }
-      const prefix = `${ordered[1]}${Number(ordered[2]) + 1}${ordered[3]}`
-      replaceRange(cursor, cursor, `\n${prefix}`, prefix.length + 1)
-      return true
-    }
-    return false
-  }
+  }, [])
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.nativeEvent.isComposing) return
-    const textarea = event.currentTarget
-    const start = textarea.selectionStart
-    const end = textarea.selectionEnd
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view || view.state.doc.toString() === value) return
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+      annotations: Transaction.addToHistory.of(false),
+    })
+  }, [value])
 
-    if (slashMatch && commands.length > 0) {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        const direction = event.key === 'ArrowDown' ? 1 : -1
-        setActiveCommand((current) => (current + direction + commands.length) % commands.length)
-        return
-      }
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        applyCommand(commands[activeCommand] ?? commands[0])
-        return
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setSlashMatch(null)
-        return
-      }
-    }
+  useEffect(() => {
+    if (visible) viewRef.current?.requestMeasure()
+  }, [visible])
 
-    if (event.key === '`' && start === end && value.slice(Math.max(0, start - 2), start) === '``') {
-      event.preventDefault()
-      replaceRange(start, end, '`\n\n```', 2)
-      return
-    }
-
-    const pairs: Record<string, string> = { '(': ')', '[': ']', '{': '}', '"': '"' }
-    const closing = pairs[event.key]
-    if (closing === event.key && start === end && value[start] === event.key) {
-      event.preventDefault()
-      restoreSelection(start + 1)
-      return
-    }
-    if (closing) {
-      event.preventDefault()
-      const selected = value.slice(start, end)
-      replaceRange(start, end, event.key + selected + closing, 1, selected ? selected.length + 1 : 1)
-      return
-    }
-    if ([')', ']', '}'].includes(event.key) && start === end && value[start] === event.key) {
-      event.preventDefault()
-      restoreSelection(start + 1)
-      return
-    }
-    if (event.key === 'Backspace' && start === end && start > 0 && pairs[value[start - 1]] === value[start]) {
-      event.preventDefault()
-      replaceRange(start - 1, start + 1, '', 0)
-      return
-    }
-    if (event.key === 'Enter' && start === end && continueList(start)) {
-      event.preventDefault()
-    }
+  const applyTemplate = (template: MarkdownTemplate) => {
+    const view = viewRef.current
+    if (view) insertTemplate(view, template)
   }
 
   return (
-    <div className="markdown-editor-input">
+    <div className={`markdown-editor-input ${visible ? '' : 'markdown-editor-input--hidden'}`}>
       <div className="markdown-tools" role="toolbar" aria-label="Markdown 서식">
-        <button type="button" title="제목 2" onClick={() => replaceSelection('## ', 3)}><Heading2 size={14} /><span>제목</span></button>
-        <button type="button" title="굵게" onClick={() => wrapSelection('**', '**')}><strong>B</strong><span>굵게</span></button>
-        <button type="button" title="코드 블록" onClick={() => replaceSelection('```text\n\n```', 3, 7)}><Code2 size={14} /><span>코드</span></button>
-        <button type="button" title="표" onClick={() => replaceSelection('| 제목 1 | 제목 2 |\n| --- | --- |\n| 내용 1 | 내용 2 |', 2, 6)}><Table2 size={14} /><span>표</span></button>
-        <small><kbd>/</kbd> 명령어</small>
+        <button type="button" title="제목 2" onClick={() => applyTemplate(MARKDOWN_TEMPLATES[0])}><Heading2 size={14} /><span>제목</span></button>
+        <button type="button" title="굵게 (Ctrl+B)" onClick={() => viewRef.current && wrapSelection(viewRef.current, '**', '**')}><strong>B</strong><span>굵게</span></button>
+        <button type="button" title="코드 블록" onClick={() => applyTemplate(MARKDOWN_TEMPLATES[4])}><Code2 size={14} /><span>코드</span></button>
+        <button type="button" title="표" onClick={() => applyTemplate(MARKDOWN_TEMPLATES[5])}><Table2 size={14} /><span>표</span></button>
+        <small><kbd>/</kbd> 명령어 · <kbd>Ctrl+B</kbd> 굵게</small>
       </div>
-      <label className="editor-input-pane">
-        <span className="sr-only">Markdown 내용</span>
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={changeContent}
-          onKeyDown={handleKeyDown}
-          onClick={(event) => updateSlashMenu(value, event.currentTarget.selectionStart)}
-          onKeyUp={(event) => {
-            if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) {
-              updateSlashMenu(value, event.currentTarget.selectionStart)
-            }
-          }}
-          spellCheck={false}
-        />
-      </label>
-      {slashMatch && (
-        <div className="slash-command-menu" role="listbox" aria-label="Markdown 블록 선택">
-          <header><span>블록 추가</span><small>↑↓ 선택 · Enter 적용</small></header>
-          {commands.length === 0 ? (
-            <p>일치하는 명령어가 없습니다.</p>
-          ) : commands.map((command, index) => (
-            <button
-              ref={(element) => { commandRefs.current[index] = element }}
-              type="button"
-              role="option"
-              aria-selected={index === activeCommand}
-              className={index === activeCommand ? 'active' : ''}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => applyCommand(command)}
-              key={command.name}
-            >
-              <span>{command.icon}</span>
-              <span><strong>{command.name}</strong><small>{command.description}</small></span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="codemirror-host" ref={containerRef} />
     </div>
   )
 }
