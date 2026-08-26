@@ -50,7 +50,8 @@ export interface RagSearchHit {
 
 export interface RagSearchResponse {
   query: string
-  embeddingModel: string
+  embeddingModel: string | null
+  mode: 'DENSE' | 'SPARSE'
   limit: number
   minimumScore: number
   cachedQueryEmbedding: boolean

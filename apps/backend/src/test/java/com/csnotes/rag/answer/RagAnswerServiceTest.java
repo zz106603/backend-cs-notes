@@ -143,7 +143,7 @@ class RagAnswerServiceTest {
             RecordingUsageStore usageStore
     ) {
         RagSearchService searchService = new RagSearchService(
-                new TestEmbeddingProvider(), store, 5, 20, 500, 0.3, Duration.ofMinutes(10), 100
+                new TestEmbeddingProvider(), store, 5, 20, 500, 0.3, 0.0, Duration.ofMinutes(10), 100
         );
         return new RagAnswerService(searchService, generator, 4, 6, maxContextCharacters,
                 0.3, Duration.ofMinutes(10), 100, usageStore,

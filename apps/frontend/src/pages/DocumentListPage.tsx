@@ -47,7 +47,7 @@ export function DocumentListPage() {
   const [searchParams] = useSearchParams()
   const category = searchParams.get('category') ?? undefined
   const [query, setQuery] = useState('')
-  const [searchMode, setSearchMode] = useState<'general' | 'semantic'>('general')
+  const [searchMode, setSearchMode] = useState<'general' | 'dense' | 'sparse'>('general')
   const [viewMode, setViewMode] = usePersistentState<'cards' | 'list'>('cs-notes-library-view', 'cards')
   const debouncedQuery = useDebouncedValue(query, 250)
   const { data: documents, isLoading, error } = useQuery({
@@ -56,17 +56,22 @@ export function DocumentListPage() {
     placeholderData: (previousData) => previousData,
     enabled: searchMode === 'general',
   })
-  const semanticSearch = useMutation({ mutationFn: api.semanticSearch })
-  const semanticDocuments = groupSemanticResults(semanticSearch.data?.results ?? [])
+  const ragSearch = useMutation({
+    mutationFn: ({ searchQuery, mode }: { searchQuery: string; mode: 'DENSE' | 'SPARSE' }) =>
+      api.ragSearch(searchQuery, mode),
+  })
+  const semanticDocuments = groupSemanticResults(ragSearch.data?.results ?? [])
 
-  const changeSearchMode = (mode: 'general' | 'semantic') => {
+  const changeSearchMode = (mode: 'general' | 'dense' | 'sparse') => {
     setSearchMode(mode)
-    semanticSearch.reset()
+    ragSearch.reset()
   }
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault()
-    if (searchMode === 'semantic' && query.trim()) semanticSearch.mutate(query.trim())
+    if (searchMode !== 'general' && query.trim()) {
+      ragSearch.mutate({ searchQuery: query.trim(), mode: searchMode === 'dense' ? 'DENSE' : 'SPARSE' })
+    }
   }
 
   return (
@@ -89,32 +94,41 @@ export function DocumentListPage() {
           <button
             type="button"
             role="tab"
-            aria-selected={searchMode === 'semantic'}
-            className={searchMode === 'semantic' ? 'active' : ''}
-            onClick={() => changeSearchMode('semantic')}
+            aria-selected={searchMode === 'dense'}
+            className={searchMode === 'dense' ? 'active' : ''}
+            onClick={() => changeSearchMode('dense')}
           >
             <BrainCircuit size={14} /> 의미 검색
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={searchMode === 'sparse'}
+            className={searchMode === 'sparse' ? 'active' : ''}
+            onClick={() => changeSearchMode('sparse')}
+          >
+            <Search size={14} /> 키워드 검색
+          </button>
         </div>
 
-        <form className={`search-box ${searchMode === 'semantic' ? 'search-box--semantic' : ''}`} onSubmit={submitSearch}>
-          {searchMode === 'semantic' ? <BrainCircuit size={20} /> : <Search size={20} />}
+        <form className={`search-box ${searchMode !== 'general' ? 'search-box--semantic' : ''}`} onSubmit={submitSearch}>
+          {searchMode === 'dense' ? <BrainCircuit size={20} /> : <Search size={20} />}
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={searchMode === 'semantic' ? '의미나 개념을 문장으로 질문해 보세요' : '제목, 태그 또는 본문 검색'}
-            aria-label={searchMode === 'semantic' ? '의미 검색' : '문서 검색'}
+            placeholder={searchMode === 'dense' ? '의미나 개념을 문장으로 질문해 보세요' : searchMode === 'sparse' ? '정확한 기술 용어나 키워드를 입력하세요' : '제목, 태그 또는 본문 검색'}
+            aria-label={searchMode === 'dense' ? '의미 검색' : searchMode === 'sparse' ? '키워드 검색' : '문서 검색'}
           />
-          {searchMode === 'semantic' ? (
-            <button className="semantic-search-button" type="submit" disabled={!query.trim() || semanticSearch.isPending}>
-              {semanticSearch.isPending ? '검색 중' : '검색'}
+          {searchMode !== 'general' ? (
+            <button className="semantic-search-button" type="submit" disabled={!query.trim() || ragSearch.isPending}>
+              {ragSearch.isPending ? '검색 중' : '검색'}
             </button>
           ) : <kbd>/</kbd>}
         </form>
-        {searchMode === 'semantic' && (
+        {searchMode !== 'general' && (
           <p className="semantic-search-note">
-            Enter 또는 검색 버튼을 누를 때만 의미 검색을 실행합니다.
-            {category ? ' 의미 검색은 선택한 폴더와 관계없이 전체 문서를 대상으로 합니다.' : ''}
+            {searchMode === 'dense' ? 'Enter 또는 검색 버튼을 누를 때만 임베딩 API를 호출합니다.' : '키워드 검색은 PostgreSQL FTS를 사용하며 OpenAI 비용이 발생하지 않습니다.'}
+            {category ? ' 검색은 선택한 폴더와 관계없이 전체 문서를 대상으로 합니다.' : ''}
           </p>
         )}
       </section>
@@ -122,13 +136,13 @@ export function DocumentListPage() {
       <section className="library-section">
         <header className="section-header">
           <div>
-            <span>{searchMode === 'semantic' ? 'SEMANTIC RETRIEVAL' : 'COLLECTION'}</span>
-            <h2>{searchMode === 'semantic'
-              ? semanticSearch.data ? `'${semanticSearch.data.query}' 관련 문서` : '의미로 문서 찾기'
+            <span>{searchMode === 'dense' ? 'DENSE RETRIEVAL' : searchMode === 'sparse' ? 'SPARSE RETRIEVAL' : 'COLLECTION'}</span>
+            <h2>{searchMode !== 'general'
+              ? ragSearch.data ? `'${ragSearch.data.query}' 관련 문서` : searchMode === 'dense' ? '의미로 문서 찾기' : '키워드로 문서 찾기'
               : debouncedQuery ? `'${debouncedQuery}' 검색 결과` : category ? `${category} 문서` : '전체 문서'}</h2>
           </div>
           <div className="section-actions">
-            <p>{searchMode === 'semantic' ? `${semanticDocuments.length} related notes` : `${documents?.length ?? 0} notes`}</p>
+            <p>{searchMode !== 'general' ? `${semanticDocuments.length} related notes` : `${documents?.length ?? 0} notes`}</p>
             {searchMode === 'general' && (
               <div className="view-mode-switch" role="group" aria-label="문서 보기 방식">
                 <button type="button" className={viewMode === 'cards' ? 'active' : ''} onClick={() => setViewMode('cards')} aria-label="카드형 보기"><Grid2X2 size={14} /></button>
@@ -180,23 +194,23 @@ export function DocumentListPage() {
           ))}
         </div>}
 
-        {searchMode === 'semantic' && !semanticSearch.data && !semanticSearch.isPending && !semanticSearch.error && (
+        {searchMode !== 'general' && !ragSearch.data && !ragSearch.isPending && !ragSearch.error && (
           <div className="semantic-search-guide">
             <BrainCircuit size={30} />
-            <h3>단어가 달라도 의미가 가까운 문서를 찾습니다</h3>
-            <p>예: “트랜잭션이 다른 메서드로 전파되는 방식은?”</p>
+            <h3>{searchMode === 'dense' ? '단어가 달라도 의미가 가까운 문서를 찾습니다' : '정확한 기술 용어가 포함된 문서를 찾습니다'}</h3>
+            <p>{searchMode === 'dense' ? '예: “트랜잭션이 다른 메서드로 전파되는 방식은?”' : '예: “REQUIRES_NEW” 또는 “HTTP 429”'}</p>
           </div>
         )}
-        {searchMode === 'semantic' && semanticSearch.isPending && <LoadingState />}
-        {searchMode === 'semantic' && semanticSearch.error && <ErrorState message={(semanticSearch.error as Error).message} />}
-        {searchMode === 'semantic' && semanticSearch.data && semanticDocuments.length === 0 && (
+        {searchMode !== 'general' && ragSearch.isPending && <LoadingState />}
+        {searchMode !== 'general' && ragSearch.error && <ErrorState message={(ragSearch.error as Error).message} />}
+        {searchMode !== 'general' && ragSearch.data && semanticDocuments.length === 0 && (
           <div className="empty-state">
             <Search size={28} />
             <h3>관련 문서를 찾지 못했습니다</h3>
             <p>다른 표현으로 질문하거나 문서 색인 상태를 확인해 보세요.</p>
           </div>
         )}
-        {searchMode === 'semantic' && semanticDocuments.length > 0 && (
+        {searchMode !== 'general' && semanticDocuments.length > 0 && (
           <div className="semantic-results">
             {semanticDocuments.map((document) => (
               <article className="semantic-result-card" key={document.documentId}>

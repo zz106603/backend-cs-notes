@@ -49,6 +49,7 @@ rag:
     max-limit: ${RAG_SEARCH_MAX_LIMIT:20}
     max-query-characters: ${RAG_SEARCH_MAX_QUERY_CHARACTERS:500}
     default-minimum-score: ${RAG_SEARCH_DEFAULT_MINIMUM_SCORE:0.5}
+    sparse-default-minimum-score: ${RAG_SEARCH_SPARSE_DEFAULT_MINIMUM_SCORE:0.0}
     query-cache-ttl: ${RAG_SEARCH_QUERY_CACHE_TTL:10m}
     query-cache-max-entries: ${RAG_SEARCH_QUERY_CACHE_MAX_ENTRIES:100}
   answer:

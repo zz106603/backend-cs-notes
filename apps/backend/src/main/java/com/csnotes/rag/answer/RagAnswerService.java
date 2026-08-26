@@ -4,6 +4,7 @@ import com.csnotes.rag.search.RagSearchHit;
 import com.csnotes.rag.search.RagSearchRequest;
 import com.csnotes.rag.search.RagSearchResponse;
 import com.csnotes.rag.search.RagSearchService;
+import com.csnotes.rag.search.RagSearchMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,7 +99,8 @@ public final class RagAnswerService {
         }
         UUID requestId = UUID.randomUUID();
         long requestStartedAt = System.nanoTime();
-        RagSearchResponse search = searchService.search(new RagSearchRequest(question, sourceLimit, minimumScore));
+        RagSearchResponse search = searchService.search(
+                new RagSearchRequest(question, sourceLimit, minimumScore, RagSearchMode.DENSE));
         if (search.results().isEmpty()) {
             RagAnswerResponse response = new RagAnswerResponse(requestId, question, NO_EVIDENCE_MESSAGE,
                     answerGenerator.modelName(), false, false, 0, RagAnswerUsage.unknown(), BigDecimal.ZERO, List.of());

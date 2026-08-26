@@ -8,7 +8,7 @@ import { api } from '../api'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type { RagSearchHit } from '../types'
 
-type SearchMode = 'general' | 'semantic'
+type SearchMode = 'general' | 'dense' | 'sparse'
 
 function groupSemanticResults(results: RagSearchHit[]) {
   const grouped = new Map<string, {
@@ -43,8 +43,11 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
     enabled: mode === 'general' && debouncedQuery.length > 0,
     placeholderData: (previousData) => previousData,
   })
-  const semanticSearch = useMutation({ mutationFn: api.semanticSearch })
-  const semanticDocuments = groupSemanticResults(semanticSearch.data?.results ?? [])
+  const ragSearch = useMutation({
+    mutationFn: ({ searchQuery, searchMode }: { searchQuery: string; searchMode: 'DENSE' | 'SPARSE' }) =>
+      api.ragSearch(searchQuery, searchMode),
+  })
+  const semanticDocuments = groupSemanticResults(ragSearch.data?.results ?? [])
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -61,12 +64,14 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
 
   const changeMode = (nextMode: SearchMode) => {
     setMode(nextMode)
-    semanticSearch.reset()
+    ragSearch.reset()
   }
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (mode === 'semantic' && query.trim()) semanticSearch.mutate(query.trim())
+    if (mode !== 'general' && query.trim()) {
+      ragSearch.mutate({ searchQuery: query.trim(), searchMode: mode === 'dense' ? 'DENSE' : 'SPARSE' })
+    }
   }
 
   const closeFromBackdrop = (event: MouseEvent<HTMLDivElement>) => {
@@ -88,28 +93,31 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
           <button type="button" role="tab" aria-selected={mode === 'general'} className={mode === 'general' ? 'active' : ''} onClick={() => changeMode('general')}>
             <ListFilter size={14} /> 일반 검색
           </button>
-          <button type="button" role="tab" aria-selected={mode === 'semantic'} className={mode === 'semantic' ? 'active' : ''} onClick={() => changeMode('semantic')}>
+          <button type="button" role="tab" aria-selected={mode === 'dense'} className={mode === 'dense' ? 'active' : ''} onClick={() => changeMode('dense')}>
             <BrainCircuit size={14} /> 의미 검색
+          </button>
+          <button type="button" role="tab" aria-selected={mode === 'sparse'} className={mode === 'sparse' ? 'active' : ''} onClick={() => changeMode('sparse')}>
+            <Search size={14} /> 키워드 검색
           </button>
         </div>
 
-        <form className={`global-search-form ${mode === 'semantic' ? 'global-search-form--semantic' : ''}`} onSubmit={submit}>
-          {mode === 'semantic' ? <BrainCircuit size={19} /> : <Search size={19} />}
+        <form className={`global-search-form ${mode !== 'general' ? 'global-search-form--semantic' : ''}`} onSubmit={submit}>
+          {mode === 'dense' ? <BrainCircuit size={19} /> : <Search size={19} />}
           <input
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={mode === 'semantic' ? '찾고 싶은 개념을 문장으로 입력하세요' : '제목, 태그 또는 본문 검색'}
-            aria-label={mode === 'semantic' ? '의미 검색어' : '일반 검색어'}
+            placeholder={mode === 'dense' ? '찾고 싶은 개념을 문장으로 입력하세요' : mode === 'sparse' ? '정확한 기술 용어나 키워드를 입력하세요' : '제목, 태그 또는 본문 검색'}
+            aria-label={mode === 'dense' ? '의미 검색어' : mode === 'sparse' ? '키워드 검색어' : '일반 검색어'}
           />
-          {mode === 'semantic' && (
-            <button type="submit" disabled={!query.trim() || semanticSearch.isPending}>
-              {semanticSearch.isPending ? '검색 중' : '검색'}
+          {mode !== 'general' && (
+            <button type="submit" disabled={!query.trim() || ragSearch.isPending}>
+              {ragSearch.isPending ? '검색 중' : '검색'}
             </button>
           )}
         </form>
 
-        {mode === 'semantic' && <p className="global-search-cost-note">Enter 또는 검색 버튼을 눌렀을 때만 임베딩 API를 호출합니다.</p>}
+        {mode !== 'general' && <p className="global-search-cost-note">{mode === 'dense' ? 'Enter 또는 검색 버튼을 눌렀을 때만 임베딩 API를 호출합니다.' : '키워드 검색은 OpenAI 비용이 발생하지 않습니다.'}</p>}
 
         <div className="global-search-results" aria-live="polite">
           {!query.trim() && (
@@ -130,10 +138,10 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
             </Link>
           ))}
 
-          {mode === 'semantic' && semanticSearch.isPending && <div className="global-search-status"><span className="loader" /> 의미가 가까운 문서를 찾는 중</div>}
-          {mode === 'semantic' && semanticSearch.error && <div className="global-search-error">{(semanticSearch.error as Error).message}</div>}
-          {mode === 'semantic' && semanticSearch.data && semanticDocuments.length === 0 && <div className="global-search-empty"><p>관련 문서를 찾지 못했습니다.</p></div>}
-          {mode === 'semantic' && semanticDocuments.map((document) => (
+          {mode !== 'general' && ragSearch.isPending && <div className="global-search-status"><span className="loader" /> {mode === 'dense' ? '의미가 가까운' : '키워드가 일치하는'} 문서를 찾는 중</div>}
+          {mode !== 'general' && ragSearch.error && <div className="global-search-error">{(ragSearch.error as Error).message}</div>}
+          {mode !== 'general' && ragSearch.data && semanticDocuments.length === 0 && <div className="global-search-empty"><p>관련 문서를 찾지 못했습니다.</p></div>}
+          {mode !== 'general' && semanticDocuments.map((document) => (
             <Link className="global-search-result" to={`/notes/${document.documentId}`} onClick={onClose} key={document.documentId}>
               <span className="global-search-result__icon global-search-result__icon--semantic"><BrainCircuit size={17} /></span>
               <span className="global-search-result__content">
