@@ -13,7 +13,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       : path === '/api/rag/answer'
       ? 'RAG 답변 기능이 비활성화되어 있습니다. 백엔드의 답변 생성 설정을 확인해 주세요.'
       : path.startsWith('/api/rag/')
-        ? '의미 검색 기능이 비활성화되어 있습니다. 백엔드의 RAG 검색 설정을 확인해 주세요.'
+        ? 'RAG 검색 기능이 비활성화되어 있습니다. 백엔드의 검색 설정을 확인해 주세요.'
         : '문서를 찾을 수 없습니다.'
     throw new Error(problem?.detail ?? (response.status === 404 ? notFoundMessage : '요청을 처리하지 못했습니다.'))
   }
@@ -50,9 +50,9 @@ export const api = {
   restoreTrashDocument: (id: string) => request<DocumentDetail>(`/api/trash/${encodeURIComponent(id)}/restore`, {
     method: 'POST',
   }),
-  semanticSearch: (query: string) => request<RagSearchResponse>('/api/rag/search', {
+  ragSearch: (query: string, mode: 'DENSE' | 'SPARSE') => request<RagSearchResponse>('/api/rag/search', {
     method: 'POST',
-    body: JSON.stringify({ query, limit: 10, minimumScore: 0.0 }),
+    body: JSON.stringify({ query, mode, limit: 10, minimumScore: 0.0 }),
   }),
   ragAnswer: (question: string) => request<RagAnswerResponse>('/api/rag/answer', {
     method: 'POST',
