@@ -3,6 +3,7 @@ package com.csnotes.rag.search;
 public record RagSearchRequest(
         String query,
         Integer limit,
-        Double minimumScore
+        Double minimumScore,
+        RagSearchMode mode
 ) {
 }

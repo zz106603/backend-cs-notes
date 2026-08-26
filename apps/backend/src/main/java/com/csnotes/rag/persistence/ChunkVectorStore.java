@@ -23,4 +23,9 @@ public interface ChunkVectorStore {
     }
 
     List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore);
+
+    /** PostgreSQL FTS로 정확한 용어가 포함된 Chunk를 검색한다. */
+    default List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
+        throw new UnsupportedOperationException("Sparse search is not supported");
+    }
 }

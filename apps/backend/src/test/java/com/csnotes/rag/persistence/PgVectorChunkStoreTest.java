@@ -48,6 +48,18 @@ class PgVectorChunkStoreTest {
     }
 
     @Test
+    void 희소_검색의_검색어와_결과_개수를_검증한다() {
+        var store = new PgVectorChunkStore(mock(JdbcTemplate.class), new ObjectMapper(), 2);
+
+        assertThatThrownBy(() -> store.searchSparse(" ", 5, 0.0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> store.searchSparse("REQUIRES_NEW", 0, 0.0))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> store.searchSparse("REQUIRES_NEW", 101, 0.0))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void 스키마와_다른_차원의_벡터를_거부한다() {
         var store = new PgVectorChunkStore(mock(JdbcTemplate.class), new ObjectMapper(), 3);
         var query = new EmbeddingVector("query", "test-model", new float[]{1, 0});

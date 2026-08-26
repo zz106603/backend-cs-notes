@@ -151,6 +151,38 @@ public class PgVectorChunkStore implements ChunkVectorStore {
                 }, vector, query.model(), vector, minimumScore, vector, limit);
     }
 
+    /** 제목과 태그에 높은 가중치를 둔 PostgreSQL FTS 결과를 0~1 점수로 정규화한다. */
+    @Override
+    public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
+        if (query == null || query.isBlank()) throw new IllegalArgumentException("Search query must not be blank");
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("Search limit must be between 1 and 100");
+        return jdbcTemplate.query("""
+                WITH query_value AS (
+                    SELECT websearch_to_tsquery('simple', ?) AS value
+                ), ranked AS (
+                    SELECT chunk.*, ts_rank_cd(chunk.search_vector, query_value.value) AS raw_score
+                      FROM document_chunk chunk
+                      CROSS JOIN query_value
+                     WHERE chunk.search_vector @@ query_value.value
+                )
+                SELECT id, document_id, document_title, document_path, tags, section_path,
+                       sequence, content, content_hash, raw_score / (raw_score + 1.0) AS score
+                  FROM ranked
+                 WHERE raw_score / (raw_score + 1.0) >= ?
+                 ORDER BY raw_score DESC, document_id, sequence
+                 LIMIT ?
+                """, (resultSet, rowNumber) -> {
+                    DocumentChunk chunk = new DocumentChunk(
+                            resultSet.getString("id"), resultSet.getString("document_id"),
+                            resultSet.getString("document_title"), resultSet.getString("document_path"),
+                            fromJson(resultSet.getString("tags")), fromJson(resultSet.getString("section_path")),
+                            resultSet.getInt("sequence"), resultSet.getString("content"),
+                            resultSet.getString("content_hash")
+                    );
+                    return new ChunkSearchResult(chunk, resultSet.getDouble("score"));
+                }, query.strip(), minimumScore, limit);
+    }
+
     private String toJson(List<String> values) {
         try {
             return objectMapper.writeValueAsString(values);

@@ -16,7 +16,8 @@ public final class RagSearchService {
     private final int defaultLimit;
     private final int maxLimit;
     private final int maxQueryCharacters;
-    private final double defaultMinimumScore;
+    private final double defaultDenseMinimumScore;
+    private final double defaultSparseMinimumScore;
     private final long cacheTtlNanos;
     private final int cacheMaxEntries;
     private final Map<String, CachedEmbedding> queryCache = new LinkedHashMap<>(16, 0.75f, true);
@@ -27,7 +28,8 @@ public final class RagSearchService {
             int defaultLimit,
             int maxLimit,
             int maxQueryCharacters,
-            double defaultMinimumScore,
+            double defaultDenseMinimumScore,
+            double defaultSparseMinimumScore,
             Duration cacheTtl,
             int cacheMaxEntries
     ) {
@@ -36,7 +38,8 @@ public final class RagSearchService {
         this.defaultLimit = defaultLimit;
         this.maxLimit = maxLimit;
         this.maxQueryCharacters = maxQueryCharacters;
-        this.defaultMinimumScore = defaultMinimumScore;
+        this.defaultDenseMinimumScore = defaultDenseMinimumScore;
+        this.defaultSparseMinimumScore = defaultSparseMinimumScore;
         this.cacheTtlNanos = cacheTtl.toNanos();
         this.cacheMaxEntries = cacheMaxEntries;
     }
@@ -53,16 +56,29 @@ public final class RagSearchService {
         if (limit < 1 || limit > maxLimit) {
             throw new RagSearchValidationException("검색 결과 수는 1~" + maxLimit + " 사이여야 합니다.");
         }
+        RagSearchMode mode = request.mode() == null ? RagSearchMode.DENSE : request.mode();
+        double defaultMinimumScore = mode == RagSearchMode.DENSE
+                ? defaultDenseMinimumScore : defaultSparseMinimumScore;
         double minimumScore = request.minimumScore() == null ? defaultMinimumScore : request.minimumScore();
         if (!Double.isFinite(minimumScore) || minimumScore < 0 || minimumScore > 1) {
             throw new RagSearchValidationException("최소 유사도는 0~1 사이여야 합니다.");
         }
 
+        if (mode == RagSearchMode.SPARSE) {
+            List<RagSearchHit> results = vectorStore.searchSparse(query, limit, minimumScore).stream()
+                    .map(RagSearchHit::from)
+                    .toList();
+            return new RagSearchResponse(query, null, mode, limit, minimumScore, false, results);
+        }
+
+        if (embeddingProvider == null) {
+            throw new RagSearchValidationException("의미 검색에는 OpenAI API 키가 필요합니다.");
+        }
         CachedLookup lookup = queryEmbedding(query);
         List<RagSearchHit> results = vectorStore.search(lookup.embedding(), limit, minimumScore).stream()
                 .map(RagSearchHit::from)
                 .toList();
-        return new RagSearchResponse(query, embeddingProvider.modelName(), limit, minimumScore,
+        return new RagSearchResponse(query, embeddingProvider.modelName(), mode, limit, minimumScore,
                 lookup.cached(), results);
     }
 

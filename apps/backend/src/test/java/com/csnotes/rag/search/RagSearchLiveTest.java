@@ -21,7 +21,7 @@ class RagSearchLiveTest {
     @Test
     void 실제_pgvector에서_트랜잭션_관련_청크를_유사도순으로_반환한다() {
         RagSearchResponse response = searchService.search(
-                new RagSearchRequest("Spring 트랜잭션 전파는 어떻게 동작하나요?", 5, 0.0)
+                new RagSearchRequest("Spring 트랜잭션 전파는 어떻게 동작하나요?", 5, 0.0, RagSearchMode.DENSE)
         );
 
         assertThat(response.results())
