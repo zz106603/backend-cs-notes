@@ -24,7 +24,7 @@ class RagSearchServiceTest {
     void 질의를_임베딩하고_유사도_순서의_청크와_출처를_반환한다() {
         RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
         RecordingVectorStore store = new RecordingVectorStore();
-        store.results = List.of(result("트랜잭션 전파", 0.91), result("격리 수준", 0.82));
+        store.denseResults = List.of(result("트랜잭션 전파", 0.91), result("격리 수준", 0.82));
         RagSearchService service = service(provider, store);
 
         RagSearchResponse response = service.search(
@@ -56,7 +56,7 @@ class RagSearchServiceTest {
     void 희소_검색은_임베딩_API를_호출하지_않고_FTS_결과를_반환한다() {
         RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
         RecordingVectorStore store = new RecordingVectorStore();
-        store.results = List.of(result("REQUIRES_NEW 전파", 0.74));
+        store.sparseResults = List.of(result("REQUIRES_NEW 전파", 0.74));
         RagSearchService service = service(provider, store);
 
         RagSearchResponse response = service.search(
@@ -69,6 +69,32 @@ class RagSearchServiceTest {
         assertThat(response.mode()).isEqualTo(RagSearchMode.SPARSE);
         assertThat(response.embeddingModel()).isNull();
         assertThat(response.results()).hasSize(1);
+    }
+
+    @Test
+    void 통합_검색은_Dense와_Sparse_후보를_RRF로_합치고_기여_순위를_반환한다() {
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        store.denseResults = List.of(result("공통 청크", 0.91), result("의미 청크", 0.82));
+        store.sparseResults = List.of(result("키워드 청크", 0.76), result("공통 청크", 0.65));
+        RagSearchService service = service(provider, store);
+
+        RagSearchResponse response = service.search(
+                new RagSearchRequest("트랜잭션 전파", 3, 0.5, RagSearchMode.HYBRID));
+
+        assertThat(provider.queries).containsExactly("트랜잭션 전파");
+        assertThat(store.denseLimit).isEqualTo(20);
+        assertThat(store.sparseLimit).isEqualTo(20);
+        assertThat(store.sparseMinimumScore).isZero();
+        assertThat(response.mode()).isEqualTo(RagSearchMode.HYBRID);
+        assertThat(response.results()).extracting(RagSearchHit::content)
+                .containsExactly("공통 청크", "키워드 청크", "의미 청크");
+        RagSearchHit common = response.results().getFirst();
+        assertThat(common.matchedBy()).containsExactly(RagSearchMode.DENSE, RagSearchMode.SPARSE);
+        assertThat(common.denseRank()).isEqualTo(1);
+        assertThat(common.sparseRank()).isEqualTo(2);
+        assertThat(common.denseScore()).isEqualTo(0.91);
+        assertThat(common.sparseScore()).isEqualTo(0.65);
     }
 
     @Test
@@ -87,7 +113,8 @@ class RagSearchServiceTest {
     }
 
     private RagSearchService service(RecordingEmbeddingProvider provider, RecordingVectorStore store) {
-        return new RagSearchService(provider, store, 5, 20, 500, 0.5, 0.0, Duration.ofMinutes(10), 100);
+        return new RagSearchService(provider, store, 5, 20, 500, 0.5, 0.0,
+                20, 60, Duration.ofMinutes(10), 100);
     }
 
     private ChunkSearchResult result(String content, double score) {
@@ -111,10 +138,14 @@ class RagSearchServiceTest {
     }
 
     private static final class RecordingVectorStore implements ChunkVectorStore {
-        private List<ChunkSearchResult> results = List.of();
+        private List<ChunkSearchResult> denseResults = List.of();
+        private List<ChunkSearchResult> sparseResults = List.of();
         private int limit;
         private double minimumScore;
         private String sparseQuery;
+        private int denseLimit;
+        private int sparseLimit;
+        private double sparseMinimumScore;
 
         @Override public void replaceDocumentChunks(String documentId, List<EmbeddedChunk> chunks) { }
         @Override public void deleteDocument(String documentId) { }
@@ -124,16 +155,19 @@ class RagSearchServiceTest {
         @Override
         public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) {
             this.limit = limit;
+            this.denseLimit = limit;
             this.minimumScore = minimumScore;
-            return results;
+            return denseResults;
         }
 
         @Override
         public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
             this.sparseQuery = query;
             this.limit = limit;
+            this.sparseLimit = limit;
             this.minimumScore = minimumScore;
-            return results;
+            this.sparseMinimumScore = minimumScore;
+            return sparseResults;
         }
     }
 }

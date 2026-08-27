@@ -12,11 +12,21 @@ public record RagSearchHit(
         List<String> tags,
         List<String> sectionPath,
         String content,
-        double score
+        double score,
+        Double denseScore,
+        Double sparseScore,
+        Integer denseRank,
+        Integer sparseRank,
+        List<RagSearchMode> matchedBy
 ) {
-    static RagSearchHit from(ChunkSearchResult result) {
+    static RagSearchHit from(ChunkSearchResult result, RagSearchMode mode, int rank) {
         var chunk = result.chunk();
         return new RagSearchHit(chunk.id(), chunk.documentId(), chunk.documentTitle(), chunk.documentPath(),
-                chunk.tags(), chunk.sectionPath(), chunk.content(), result.score());
+                chunk.tags(), chunk.sectionPath(), chunk.content(), result.score(),
+                mode == RagSearchMode.DENSE ? result.score() : null,
+                mode == RagSearchMode.SPARSE ? result.score() : null,
+                mode == RagSearchMode.DENSE ? rank : null,
+                mode == RagSearchMode.SPARSE ? rank : null,
+                List.of(mode));
     }
 }

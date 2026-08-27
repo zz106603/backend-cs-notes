@@ -143,7 +143,8 @@ class RagAnswerServiceTest {
             RecordingUsageStore usageStore
     ) {
         RagSearchService searchService = new RagSearchService(
-                new TestEmbeddingProvider(), store, 5, 20, 500, 0.3, 0.0, Duration.ofMinutes(10), 100
+                new TestEmbeddingProvider(), store, 5, 20, 500, 0.3, 0.0,
+                20, 60, Duration.ofMinutes(10), 100
         );
         return new RagAnswerService(searchService, generator, 4, 6, maxContextCharacters,
                 0.3, Duration.ofMinutes(10), 100, usageStore,
@@ -191,6 +192,7 @@ class RagAnswerServiceTest {
         @Override public Map<String, float[]> findReusableEmbeddings(String modelName, Set<String> contentHashes) { return Map.of(); }
         @Override public Set<String> findIndexedDocumentIds() { return Set.of(); }
         @Override public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) { return results; }
+        @Override public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) { return results; }
     }
 
     private static final class RecordingUsageStore implements RagAnswerUsageStore {

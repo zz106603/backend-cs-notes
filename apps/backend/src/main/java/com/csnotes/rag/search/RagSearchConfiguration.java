@@ -22,10 +22,13 @@ public class RagSearchConfiguration {
             @Value("${rag.search.max-query-characters}") int maxQueryCharacters,
             @Value("${rag.search.default-minimum-score}") double defaultMinimumScore,
             @Value("${rag.search.sparse-default-minimum-score}") double sparseDefaultMinimumScore,
+            @Value("${rag.search.hybrid-candidate-limit}") int hybridCandidateLimit,
+            @Value("${rag.search.hybrid-rrf-k}") int hybridRrfK,
             @Value("${rag.search.query-cache-ttl}") Duration cacheTtl,
             @Value("${rag.search.query-cache-max-entries}") int cacheMaxEntries
     ) {
         return new RagSearchService(embeddingProvider.getIfAvailable(), vectorStore, defaultLimit, maxLimit,
-                maxQueryCharacters, defaultMinimumScore, sparseDefaultMinimumScore, cacheTtl, cacheMaxEntries);
+                maxQueryCharacters, defaultMinimumScore, sparseDefaultMinimumScore,
+                hybridCandidateLimit, hybridRrfK, cacheTtl, cacheMaxEntries);
     }
 }
