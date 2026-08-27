@@ -100,7 +100,7 @@ public final class RagAnswerService {
         UUID requestId = UUID.randomUUID();
         long requestStartedAt = System.nanoTime();
         RagSearchResponse search = searchService.search(
-                new RagSearchRequest(question, sourceLimit, minimumScore, RagSearchMode.DENSE));
+                new RagSearchRequest(question, sourceLimit, minimumScore, RagSearchMode.HYBRID));
         if (search.results().isEmpty()) {
             RagAnswerResponse response = new RagAnswerResponse(requestId, question, NO_EVIDENCE_MESSAGE,
                     answerGenerator.modelName(), false, false, 0, RagAnswerUsage.unknown(), BigDecimal.ZERO, List.of());

@@ -50,7 +50,7 @@ export const api = {
   restoreTrashDocument: (id: string) => request<DocumentDetail>(`/api/trash/${encodeURIComponent(id)}/restore`, {
     method: 'POST',
   }),
-  ragSearch: (query: string, mode: 'DENSE' | 'SPARSE') => request<RagSearchResponse>('/api/rag/search', {
+  ragSearch: (query: string, mode: 'DENSE' | 'SPARSE' | 'HYBRID') => request<RagSearchResponse>('/api/rag/search', {
     method: 'POST',
     body: JSON.stringify({ query, mode, limit: 10, minimumScore: 0.0 }),
   }),

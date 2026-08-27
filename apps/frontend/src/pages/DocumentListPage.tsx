@@ -10,6 +10,19 @@ import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { usePersistentState } from '../hooks/usePersistentState'
 import type { RagSearchHit } from '../types'
 
+type SearchMode = 'general' | 'hybrid' | 'dense' | 'sparse'
+
+function toRagMode(mode: Exclude<SearchMode, 'general'>) {
+  return mode.toUpperCase() as 'HYBRID' | 'DENSE' | 'SPARSE'
+}
+
+function matchedByLabel(hit: RagSearchHit) {
+  return [
+    hit.denseRank ? `의미 ${hit.denseRank}위` : null,
+    hit.sparseRank ? `키워드 ${hit.sparseRank}위` : null,
+  ].filter(Boolean).join(' · ')
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(new Date(value))
 }
@@ -47,7 +60,7 @@ export function DocumentListPage() {
   const [searchParams] = useSearchParams()
   const category = searchParams.get('category') ?? undefined
   const [query, setQuery] = useState('')
-  const [searchMode, setSearchMode] = useState<'general' | 'dense' | 'sparse'>('general')
+  const [searchMode, setSearchMode] = useState<SearchMode>('general')
   const [viewMode, setViewMode] = usePersistentState<'cards' | 'list'>('cs-notes-library-view', 'cards')
   const debouncedQuery = useDebouncedValue(query, 250)
   const { data: documents, isLoading, error } = useQuery({
@@ -57,12 +70,12 @@ export function DocumentListPage() {
     enabled: searchMode === 'general',
   })
   const ragSearch = useMutation({
-    mutationFn: ({ searchQuery, mode }: { searchQuery: string; mode: 'DENSE' | 'SPARSE' }) =>
+    mutationFn: ({ searchQuery, mode }: { searchQuery: string; mode: 'DENSE' | 'SPARSE' | 'HYBRID' }) =>
       api.ragSearch(searchQuery, mode),
   })
   const semanticDocuments = groupSemanticResults(ragSearch.data?.results ?? [])
 
-  const changeSearchMode = (mode: 'general' | 'dense' | 'sparse') => {
+  const changeSearchMode = (mode: SearchMode) => {
     setSearchMode(mode)
     ragSearch.reset()
   }
@@ -70,7 +83,7 @@ export function DocumentListPage() {
   const submitSearch = (event: FormEvent) => {
     event.preventDefault()
     if (searchMode !== 'general' && query.trim()) {
-      ragSearch.mutate({ searchQuery: query.trim(), mode: searchMode === 'dense' ? 'DENSE' : 'SPARSE' })
+      ragSearch.mutate({ searchQuery: query.trim(), mode: toRagMode(searchMode) })
     }
   }
 
@@ -90,6 +103,15 @@ export function DocumentListPage() {
             onClick={() => changeSearchMode('general')}
           >
             <ListFilter size={14} /> 일반 검색
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={searchMode === 'hybrid'}
+            className={searchMode === 'hybrid' ? 'active' : ''}
+            onClick={() => changeSearchMode('hybrid')}
+          >
+            <Sparkles size={14} /> 통합 검색
           </button>
           <button
             type="button"
@@ -116,8 +138,8 @@ export function DocumentListPage() {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={searchMode === 'dense' ? '의미나 개념을 문장으로 질문해 보세요' : searchMode === 'sparse' ? '정확한 기술 용어나 키워드를 입력하세요' : '제목, 태그 또는 본문 검색'}
-            aria-label={searchMode === 'dense' ? '의미 검색' : searchMode === 'sparse' ? '키워드 검색' : '문서 검색'}
+            placeholder={searchMode === 'hybrid' ? '개념과 핵심 키워드를 함께 입력하세요' : searchMode === 'dense' ? '의미나 개념을 문장으로 질문해 보세요' : searchMode === 'sparse' ? '정확한 기술 용어나 키워드를 입력하세요' : '제목, 태그 또는 본문 검색'}
+            aria-label={searchMode === 'hybrid' ? '통합 검색' : searchMode === 'dense' ? '의미 검색' : searchMode === 'sparse' ? '키워드 검색' : '문서 검색'}
           />
           {searchMode !== 'general' ? (
             <button className="semantic-search-button" type="submit" disabled={!query.trim() || ragSearch.isPending}>
@@ -127,7 +149,7 @@ export function DocumentListPage() {
         </form>
         {searchMode !== 'general' && (
           <p className="semantic-search-note">
-            {searchMode === 'dense' ? 'Enter 또는 검색 버튼을 누를 때만 임베딩 API를 호출합니다.' : '키워드 검색은 PostgreSQL FTS를 사용하며 OpenAI 비용이 발생하지 않습니다.'}
+            {searchMode === 'hybrid' ? '의미 검색과 키워드 검색 결과를 RRF 순위로 합칩니다. 질의 임베딩 비용이 발생합니다.' : searchMode === 'dense' ? 'Enter 또는 검색 버튼을 누를 때만 임베딩 API를 호출합니다.' : '키워드 검색은 PostgreSQL FTS를 사용하며 OpenAI 비용이 발생하지 않습니다.'}
             {category ? ' 검색은 선택한 폴더와 관계없이 전체 문서를 대상으로 합니다.' : ''}
           </p>
         )}
@@ -136,9 +158,9 @@ export function DocumentListPage() {
       <section className="library-section">
         <header className="section-header">
           <div>
-            <span>{searchMode === 'dense' ? 'DENSE RETRIEVAL' : searchMode === 'sparse' ? 'SPARSE RETRIEVAL' : 'COLLECTION'}</span>
+            <span>{searchMode === 'hybrid' ? 'HYBRID RETRIEVAL' : searchMode === 'dense' ? 'DENSE RETRIEVAL' : searchMode === 'sparse' ? 'SPARSE RETRIEVAL' : 'COLLECTION'}</span>
             <h2>{searchMode !== 'general'
-              ? ragSearch.data ? `'${ragSearch.data.query}' 관련 문서` : searchMode === 'dense' ? '의미로 문서 찾기' : '키워드로 문서 찾기'
+              ? ragSearch.data ? `'${ragSearch.data.query}' 관련 문서` : searchMode === 'hybrid' ? '의미와 키워드로 함께 찾기' : searchMode === 'dense' ? '의미로 문서 찾기' : '키워드로 문서 찾기'
               : debouncedQuery ? `'${debouncedQuery}' 검색 결과` : category ? `${category} 문서` : '전체 문서'}</h2>
           </div>
           <div className="section-actions">
@@ -197,8 +219,8 @@ export function DocumentListPage() {
         {searchMode !== 'general' && !ragSearch.data && !ragSearch.isPending && !ragSearch.error && (
           <div className="semantic-search-guide">
             <BrainCircuit size={30} />
-            <h3>{searchMode === 'dense' ? '단어가 달라도 의미가 가까운 문서를 찾습니다' : '정확한 기술 용어가 포함된 문서를 찾습니다'}</h3>
-            <p>{searchMode === 'dense' ? '예: “트랜잭션이 다른 메서드로 전파되는 방식은?”' : '예: “REQUIRES_NEW” 또는 “HTTP 429”'}</p>
+            <h3>{searchMode === 'hybrid' ? '의미와 정확한 키워드를 모두 반영합니다' : searchMode === 'dense' ? '단어가 달라도 의미가 가까운 문서를 찾습니다' : '정확한 기술 용어가 포함된 문서를 찾습니다'}</h3>
+            <p>{searchMode === 'sparse' ? '예: “REQUIRES_NEW” 또는 “HTTP 429”' : '예: “REQUIRES_NEW 트랜잭션 전파 방식은?”'}</p>
           </div>
         )}
         {searchMode !== 'general' && ragSearch.isPending && <LoadingState />}
@@ -216,7 +238,7 @@ export function DocumentListPage() {
               <article className="semantic-result-card" key={document.documentId}>
                 <header>
                   <div>
-                    <span className="semantic-score">관련도 {(document.bestScore * 100).toFixed(1)}%</span>
+                    <span className="semantic-score">{searchMode === 'hybrid' ? '통합 관련도' : '관련도'} {(document.bestScore * 100).toFixed(1)}%</span>
                     <h3>{document.title}</h3>
                     <p>{document.path}</p>
                   </div>
@@ -229,7 +251,7 @@ export function DocumentListPage() {
                     <div className="semantic-hit" key={hit.chunkId}>
                       <div className="semantic-hit__meta">
                         <span>{hit.sectionPath.length > 0 ? hit.sectionPath.join(' › ') : '문서 서두'}</span>
-                        <small>{hit.score.toFixed(3)}</small>
+                        <small>{searchMode === 'hybrid' ? matchedByLabel(hit) : hit.score.toFixed(3)}</small>
                       </div>
                       <p>{hit.content}</p>
                     </div>
