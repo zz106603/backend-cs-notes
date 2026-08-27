@@ -8,7 +8,7 @@ import { api } from '../api'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import type { RagSearchHit } from '../types'
 
-type SearchMode = 'general' | 'dense' | 'sparse'
+type SearchMode = 'general' | 'hybrid' | 'dense' | 'sparse'
 
 function groupSemanticResults(results: RagSearchHit[]) {
   const grouped = new Map<string, {
@@ -44,7 +44,7 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
     placeholderData: (previousData) => previousData,
   })
   const ragSearch = useMutation({
-    mutationFn: ({ searchQuery, searchMode }: { searchQuery: string; searchMode: 'DENSE' | 'SPARSE' }) =>
+    mutationFn: ({ searchQuery, searchMode }: { searchQuery: string; searchMode: 'DENSE' | 'SPARSE' | 'HYBRID' }) =>
       api.ragSearch(searchQuery, searchMode),
   })
   const semanticDocuments = groupSemanticResults(ragSearch.data?.results ?? [])
@@ -70,7 +70,7 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
   const submit = (event: FormEvent) => {
     event.preventDefault()
     if (mode !== 'general' && query.trim()) {
-      ragSearch.mutate({ searchQuery: query.trim(), searchMode: mode === 'dense' ? 'DENSE' : 'SPARSE' })
+      ragSearch.mutate({ searchQuery: query.trim(), searchMode: mode.toUpperCase() as 'HYBRID' | 'DENSE' | 'SPARSE' })
     }
   }
 
@@ -93,6 +93,9 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
           <button type="button" role="tab" aria-selected={mode === 'general'} className={mode === 'general' ? 'active' : ''} onClick={() => changeMode('general')}>
             <ListFilter size={14} /> 일반 검색
           </button>
+          <button type="button" role="tab" aria-selected={mode === 'hybrid'} className={mode === 'hybrid' ? 'active' : ''} onClick={() => changeMode('hybrid')}>
+            <Search size={14} /> 통합 검색
+          </button>
           <button type="button" role="tab" aria-selected={mode === 'dense'} className={mode === 'dense' ? 'active' : ''} onClick={() => changeMode('dense')}>
             <BrainCircuit size={14} /> 의미 검색
           </button>
@@ -107,8 +110,8 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
             autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={mode === 'dense' ? '찾고 싶은 개념을 문장으로 입력하세요' : mode === 'sparse' ? '정확한 기술 용어나 키워드를 입력하세요' : '제목, 태그 또는 본문 검색'}
-            aria-label={mode === 'dense' ? '의미 검색어' : mode === 'sparse' ? '키워드 검색어' : '일반 검색어'}
+            placeholder={mode === 'hybrid' ? '개념과 핵심 키워드를 함께 입력하세요' : mode === 'dense' ? '찾고 싶은 개념을 문장으로 입력하세요' : mode === 'sparse' ? '정확한 기술 용어나 키워드를 입력하세요' : '제목, 태그 또는 본문 검색'}
+            aria-label={mode === 'hybrid' ? '통합 검색어' : mode === 'dense' ? '의미 검색어' : mode === 'sparse' ? '키워드 검색어' : '일반 검색어'}
           />
           {mode !== 'general' && (
             <button type="submit" disabled={!query.trim() || ragSearch.isPending}>
@@ -117,7 +120,7 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
           )}
         </form>
 
-        {mode !== 'general' && <p className="global-search-cost-note">{mode === 'dense' ? 'Enter 또는 검색 버튼을 눌렀을 때만 임베딩 API를 호출합니다.' : '키워드 검색은 OpenAI 비용이 발생하지 않습니다.'}</p>}
+        {mode !== 'general' && <p className="global-search-cost-note">{mode === 'hybrid' ? '의미와 키워드 결과를 함께 반영하며 질의 임베딩 비용이 발생합니다.' : mode === 'dense' ? 'Enter 또는 검색 버튼을 눌렀을 때만 임베딩 API를 호출합니다.' : '키워드 검색은 OpenAI 비용이 발생하지 않습니다.'}</p>}
 
         <div className="global-search-results" aria-live="polite">
           {!query.trim() && (
@@ -138,7 +141,7 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
             </Link>
           ))}
 
-          {mode !== 'general' && ragSearch.isPending && <div className="global-search-status"><span className="loader" /> {mode === 'dense' ? '의미가 가까운' : '키워드가 일치하는'} 문서를 찾는 중</div>}
+          {mode !== 'general' && ragSearch.isPending && <div className="global-search-status"><span className="loader" /> {mode === 'hybrid' ? '의미와 키워드가 관련된' : mode === 'dense' ? '의미가 가까운' : '키워드가 일치하는'} 문서를 찾는 중</div>}
           {mode !== 'general' && ragSearch.error && <div className="global-search-error">{(ragSearch.error as Error).message}</div>}
           {mode !== 'general' && ragSearch.data && semanticDocuments.length === 0 && <div className="global-search-empty"><p>관련 문서를 찾지 못했습니다.</p></div>}
           {mode !== 'general' && semanticDocuments.map((document) => (

@@ -46,12 +46,17 @@ export interface RagSearchHit {
   sectionPath: string[]
   content: string
   score: number
+  denseScore: number | null
+  sparseScore: number | null
+  denseRank: number | null
+  sparseRank: number | null
+  matchedBy: Array<'DENSE' | 'SPARSE'>
 }
 
 export interface RagSearchResponse {
   query: string
   embeddingModel: string | null
-  mode: 'DENSE' | 'SPARSE'
+  mode: 'DENSE' | 'SPARSE' | 'HYBRID'
   limit: number
   minimumScore: number
   cachedQueryEmbedding: boolean
