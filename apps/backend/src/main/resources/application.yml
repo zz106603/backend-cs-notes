@@ -54,6 +54,9 @@ rag:
     hybrid-rrf-k: ${RAG_SEARCH_HYBRID_RRF_K:60}
     query-cache-ttl: ${RAG_SEARCH_QUERY_CACHE_TTL:10m}
     query-cache-max-entries: ${RAG_SEARCH_QUERY_CACHE_MAX_ENTRIES:100}
+  evaluation:
+    enabled: ${RAG_EVALUATION_ENABLED:true}
+    result-limit: ${RAG_EVALUATION_RESULT_LIMIT:10}
   answer:
     enabled: ${RAG_ANSWER_ENABLED:false}
     model: ${RAG_ANSWER_MODEL:gpt-4.1-mini}

@@ -464,6 +464,63 @@ kbd { padding: 2px 7px; border: 1px solid #d8dad4; border-radius: 5px; backgroun
 .rag-source-empty { margin: 15px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
 
 .page--indexing { width: min(1080px, 100%); }
+.page--evaluation { width: min(1180px, 100%); }
+.evaluation-hero { padding: 25px 0 28px; }
+.evaluation-hero h1 { margin: 18px 0 11px; font-family: 'Noto Sans KR', sans-serif; font-size: clamp(38px, 5vw, 54px); line-height: 1.15; letter-spacing: -.045em; }
+.evaluation-hero > p { max-width: 760px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
+.evaluation-note { margin-bottom: 18px; padding: 14px 17px; border: 1px solid var(--line); border-radius: 11px; background: var(--accent-soft); color: var(--muted); font-size: 11px; line-height: 1.65; }
+.evaluation-note strong { color: var(--accent); }
+.evaluation-error { margin-bottom: 14px; padding: 11px 14px; border: 1px solid #d8a09a; border-radius: 9px; background: #fff0ee; color: #a3453b; font-size: 10px; }
+.evaluation-create-panel, .evaluation-case-section, .evaluation-results { margin-bottom: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.evaluation-create-panel > header span, .evaluation-case-section > header span, .evaluation-results > header span, .evaluation-mode > header span { color: var(--accent); font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: .1em; }
+.evaluation-create-panel h2, .evaluation-case-section h2, .evaluation-results h2 { margin: 5px 0 18px; font-size: 18px; }
+.evaluation-create-panel > label { display: grid; gap: 7px; margin-bottom: 15px; }
+.evaluation-create-panel > label > span, .evaluation-document-picker > span { color: var(--muted); font-size: 10px; font-weight: 700; }
+.evaluation-create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); color: var(--ink); outline: 0; }
+.evaluation-create-panel > label input { padding: 12px 13px; font-size: 12px; }
+.evaluation-document-picker { display: grid; gap: 8px; margin-bottom: 16px; }
+.evaluation-document-search { display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); background: var(--canvas); }
+.evaluation-document-search input { min-width: 0; padding: 10px 0; border: 0; }
+.evaluation-document-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 250px; overflow: auto; }
+.evaluation-document-options > button { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.evaluation-document-options > button.selected { border-color: var(--accent); background: var(--accent-soft); }
+.evaluation-document-options > button > span:last-child { display: grid; min-width: 0; gap: 3px; }
+.evaluation-document-options strong, .evaluation-document-options small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation-document-options strong { font-size: 10px; }
+.evaluation-document-options small { color: var(--muted); font-size: 8px; }
+.evaluation-check { flex: 0 0 17px; height: 17px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 5px; color: white; }
+.selected .evaluation-check { border-color: var(--accent); background: var(--accent); }
+.evaluation-selected-paths { display: flex; flex-wrap: wrap; gap: 5px; }
+.evaluation-selected-paths > span { display: flex; align-items: center; gap: 5px; padding: 5px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 8px; }
+.evaluation-selected-paths button { display: grid; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.evaluation-case-section > header { display: flex; align-items: center; justify-content: space-between; }
+.evaluation-case-section > header small { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; }
+.evaluation-case-list { display: grid; gap: 7px; }
+.evaluation-case { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 9px; }
+.evaluation-case > div:first-child { min-width: 0; }
+.evaluation-case strong { font-size: 11px; }
+.evaluation-case p { margin: 5px 0 0; overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation-case-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.evaluation-case-actions .secondary-button { padding: 8px 10px; font-size: 9px; }
+.evaluation-empty { min-height: 120px; display: grid; place-items: center; align-content: center; gap: 8px; color: var(--muted); }
+.evaluation-empty p { margin: 0; font-size: 10px; }
+.evaluation-result-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.evaluation-mode { min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 11px; background: var(--canvas); }
+.evaluation-mode > header h3 { margin: 4px 0 13px; font-size: 14px; }
+.evaluation-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 12px; }
+.evaluation-metrics > div { min-width: 0; padding: 8px; border-radius: 7px; background: var(--panel); }
+.evaluation-metrics span, .evaluation-metrics strong { display: block; }
+.evaluation-metrics span { overflow: hidden; color: var(--muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation-metrics strong { margin-top: 4px; font-family: 'DM Mono', monospace; font-size: 12px; }
+.evaluation-ranking { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.evaluation-ranking li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; }
+.evaluation-ranking li.relevant { border-color: var(--accent); background: var(--accent-soft); }
+.evaluation-ranking li > span { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; }
+.evaluation-ranking li > div { min-width: 0; }
+.evaluation-ranking strong, .evaluation-ranking small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation-ranking strong { font-size: 9px; }
+.evaluation-ranking small { margin-top: 3px; color: var(--muted); font-size: 7px; }
+.evaluation-ranking svg { color: var(--accent); }
 .indexing-hero { padding: 25px 0 28px; }
 .indexing-hero h1 { margin: 18px 0 11px; font-family: 'Noto Sans KR', sans-serif; font-size: clamp(38px, 5vw, 54px); line-height: 1.15; letter-spacing: -.045em; }
 .indexing-hero > p { max-width: 680px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
@@ -641,6 +698,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 :root[data-theme='dark'] .rag-answer-loading,
 :root[data-theme='dark'] .global-search-modal { border-color: var(--line); background: var(--panel); }
 :root[data-theme='dark'] .global-search-error { border-color: #744a45; background: #2b1d1b; color: #e3aaa2; }
+:root[data-theme='dark'] .evaluation-error { border-color: #744a45; background: #2b1d1b; color: #e3aaa2; }
 :root[data-theme='dark'] .restore-button,
 :root[data-theme='dark'] .permanent-delete-button { border-color: var(--line); background: var(--surface-muted); }
 :root[data-theme='dark'] .rag-answer-empty,
@@ -735,4 +793,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .indexing-change-section > header { align-items: flex-start; flex-direction: column; }
   .indexing-document { grid-template-columns: auto minmax(0, 1fr); }
   .indexing-document__counts { grid-column: 2; flex-wrap: wrap; }
+  .evaluation-document-options, .evaluation-result-grid { grid-template-columns: 1fr; }
+  .evaluation-case { align-items: flex-start; flex-direction: column; }
+  .evaluation-case-actions { width: 100%; }
+  .evaluation-case-actions .secondary-button { flex: 1; justify-content: center; }
 }

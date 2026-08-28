@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Archive, Boxes, ChevronDown, ChevronRight, Database, FilePlus2, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
+import { Archive, Boxes, ChevronDown, ChevronRight, Database, FilePlus2, FlaskConical, FolderClosed, MessageCircleQuestion, Network, RefreshCw, Search, ServerCog, SquareCode, Trash2 } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 import { api } from '../api'
@@ -75,6 +75,15 @@ export function Sidebar({ onNavigate, onOpenSearch }: { onNavigate: () => void; 
       >
         <span className="nav-item__icon"><MessageCircleQuestion size={17} /></span>
         <span>문서에 질문</span>
+        <ChevronRight className="nav-item__chevron" size={15} />
+      </NavLink>
+      <NavLink
+        to="/evaluation"
+        className={({ isActive }) => `nav-item ${isActive ? 'nav-item--active' : ''}`}
+        onClick={onNavigate}
+      >
+        <span className="nav-item__icon"><FlaskConical size={17} /></span>
+        <span>검색 품질 평가</span>
         <ChevronRight className="nav-item__chevron" size={15} />
       </NavLink>
 

@@ -1,4 +1,4 @@
-import type { Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
+import type { Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagEvaluationCase, RagEvaluationRunResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -8,7 +8,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const problem = await response.json().catch(() => null) as { detail?: string } | null
-    const notFoundMessage = path.startsWith('/api/rag/index')
+    const notFoundMessage = path.startsWith('/api/rag/evaluations')
+      ? '검색 품질 평가 기능이 비활성화되어 있습니다. 백엔드의 평가 설정을 확인해 주세요.'
+      : path.startsWith('/api/rag/index')
       ? '문서 색인 기능이 비활성화되어 있습니다. 백엔드의 RAG 색인 설정을 확인해 주세요.'
       : path === '/api/rag/answer'
       ? 'RAG 답변 기능이 비활성화되어 있습니다. 백엔드의 답변 생성 설정을 확인해 주세요.'
@@ -60,4 +62,16 @@ export const api = {
   }),
   previewRagIndex: () => request<RagIndexingResult>('/api/rag/index', { method: 'POST' }),
   executeRagIndex: () => request<RagIndexingResult>('/api/rag/index?dryRun=false', { method: 'POST' }),
+  ragEvaluationCases: () => request<RagEvaluationCase[]>('/api/rag/evaluations'),
+  createRagEvaluationCase: (query: string, expectedDocumentPaths: string[]) =>
+    request<RagEvaluationCase>('/api/rag/evaluations', {
+      method: 'POST',
+      body: JSON.stringify({ query, expectedDocumentPaths }),
+    }),
+  runRagEvaluation: (id: string) => request<RagEvaluationRunResponse>(`/api/rag/evaluations/${id}/run`, {
+    method: 'POST',
+  }),
+  deleteRagEvaluationCase: (id: string) => request<void>(`/api/rag/evaluations/${id}`, {
+    method: 'DELETE',
+  }),
 }
