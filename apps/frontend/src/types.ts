@@ -118,3 +118,24 @@ export interface RagIndexingResult {
   embeddingCharacterCount: number
   documents: RagIndexingDocumentResult[]
 }
+
+export interface RagEvaluationCase {
+  id: string
+  query: string
+  expectedDocumentPaths: string[]
+  createdAt: string
+}
+
+export interface RagEvaluationModeResult {
+  mode: 'DENSE' | 'SPARSE' | 'HYBRID'
+  recallAtLimit: number
+  firstRelevantRank: number | null
+  reciprocalRank: number
+  results: RagSearchHit[]
+}
+
+export interface RagEvaluationRunResponse {
+  evaluationCase: RagEvaluationCase
+  limit: number
+  modes: RagEvaluationModeResult[]
+}
