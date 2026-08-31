@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
+import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
 import java.util.List;
@@ -57,6 +58,36 @@ class PgVectorChunkStoreTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> store.searchSparse("REQUIRES_NEW", 101, 0.0))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 희소_검색은_엄격한_AND_일치와_완화된_OR_일치를_함께_조회한다() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class)))
+                .thenReturn(List.of());
+        var store = new PgVectorChunkStore(jdbcTemplate, new ObjectMapper(), 2);
+
+        store.searchSparse("SIGTERM과 HHH000104 경고가 발생하는 이유는?", 10, 0.0);
+
+        var sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        var arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), arguments.capture());
+        assertThat(sql.getValue()).contains(
+                "websearch_to_tsquery('simple', ?)",
+                "technical_query",
+                "tsvector_to_array(to_tsvector('simple', ?))",
+                "' | '",
+                "strict_match DESC",
+                "technical_match DESC"
+        );
+        assertThat(arguments.getValue()).containsExactly(
+                "SIGTERM 과 HHH000104 경고가 발생하는 이유는?",
+                "sigterm hhh000104",
+                "SIGTERM 과 HHH000104 경고가 발생하는 이유는?",
+                0.0,
+                10
+        );
     }
 
     @Test

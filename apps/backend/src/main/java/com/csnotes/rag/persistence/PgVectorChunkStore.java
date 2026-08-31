@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.ArrayList;
 
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 @ConditionalOnProperty(name = "rag.persistence.enabled", havingValue = "true")
 public class PgVectorChunkStore implements ChunkVectorStore {
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() { };
+    private static final Pattern TECHNICAL_TERM = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_:.\\-]{1,}");
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
@@ -151,25 +153,43 @@ public class PgVectorChunkStore implements ChunkVectorStore {
                 }, vector, query.model(), vector, minimumScore, vector, limit);
     }
 
-    /** 제목과 태그에 높은 가중치를 둔 PostgreSQL FTS 결과를 0~1 점수로 정규화한다. */
+    /** 엄격한 전체 일치를 우선하되 일부 핵심어만 일치하는 자연어 질문도 후보에서 복구한다. */
     @Override
     public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
         if (query == null || query.isBlank()) throw new IllegalArgumentException("Search query must not be blank");
         if (limit < 1 || limit > 100) throw new IllegalArgumentException("Search limit must be between 1 and 100");
+        String normalizedQuery = normalizeSparseQuery(query);
+        String technicalTerms = extractTechnicalTerms(normalizedQuery);
         return jdbcTemplate.query("""
                 WITH query_value AS (
-                    SELECT websearch_to_tsquery('simple', ?) AS value
+                    SELECT
+                        websearch_to_tsquery('simple', ?) AS strict_query,
+                        websearch_to_tsquery('simple', ?) AS technical_query,
+                        to_tsquery(
+                            'simple',
+                            array_to_string(
+                                tsvector_to_array(to_tsvector('simple', ?)),
+                                ' | '
+                            )
+                        ) AS relaxed_query
                 ), ranked AS (
-                    SELECT chunk.*, ts_rank_cd(chunk.search_vector, query_value.value) AS raw_score
+                    SELECT chunk.*,
+                           ts_rank_cd(chunk.search_vector, query_value.strict_query) * 3
+                               + ts_rank_cd(chunk.search_vector, query_value.technical_query) * 4
+                               + ts_rank_cd(chunk.search_vector, query_value.relaxed_query) AS raw_score,
+                           chunk.search_vector @@ query_value.strict_query AS strict_match,
+                           chunk.search_vector @@ query_value.technical_query AS technical_match
                       FROM document_chunk chunk
                       CROSS JOIN query_value
-                     WHERE chunk.search_vector @@ query_value.value
+                     WHERE chunk.search_vector @@ query_value.strict_query
+                        OR chunk.search_vector @@ query_value.technical_query
+                        OR chunk.search_vector @@ query_value.relaxed_query
                 )
                 SELECT id, document_id, document_title, document_path, tags, section_path,
                        sequence, content, content_hash, raw_score / (raw_score + 1.0) AS score
                   FROM ranked
                  WHERE raw_score / (raw_score + 1.0) >= ?
-                 ORDER BY raw_score DESC, document_id, sequence
+                 ORDER BY strict_match DESC, technical_match DESC, raw_score DESC, document_id, sequence
                  LIMIT ?
                 """, (resultSet, rowNumber) -> {
                     DocumentChunk chunk = new DocumentChunk(
@@ -180,7 +200,22 @@ public class PgVectorChunkStore implements ChunkVectorStore {
                             resultSet.getString("content_hash")
                     );
                     return new ChunkSearchResult(chunk, resultSet.getDouble("score"));
-                }, query.strip(), minimumScore, limit);
+                }, normalizedQuery, technicalTerms, normalizedQuery, minimumScore, limit);
+    }
+
+    /** REQUIRES_NEW는, SIGTERM과 같이 기술 식별자에 붙은 한국어 조사를 별도 검색어로 분리한다. */
+    private String normalizeSparseQuery(String query) {
+        return query.strip()
+                .replaceAll("([A-Za-z0-9_])([가-힣])", "$1 $2")
+                .replaceAll("([가-힣])([A-Za-z0-9_])", "$1 $2");
+    }
+
+    /** 에러 코드·클래스명·프로토콜명 같은 영문 기술어는 별도 질의로 구성해 일반 단어보다 우선한다. */
+    private String extractTechnicalTerms(String query) {
+        return TECHNICAL_TERM.matcher(query).results()
+                .map(result -> result.group().toLowerCase())
+                .distinct()
+                .collect(java.util.stream.Collectors.joining(" "));
     }
 
     private String toJson(List<String> values) {
