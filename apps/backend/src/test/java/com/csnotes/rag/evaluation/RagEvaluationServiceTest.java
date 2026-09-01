@@ -51,19 +51,33 @@ class RagEvaluationServiceTest {
     }
 
     @Test
-    void 평가_질문과_기대_문서를_검증하고_중복_경로를_제거한다() {
+    void 평가_질문을_검증하고_기대_문서의_중복_경로를_제거한다() {
         RecordingRepository repository = new RecordingRepository();
         RagEvaluationService service = service(repository, new RecordingVectorStore());
 
         assertThatThrownBy(() -> service.create(new CreateRagEvaluationCaseRequest(" ", List.of("A.md"))))
                 .isInstanceOf(RagEvaluationValidationException.class);
-        assertThatThrownBy(() -> service.create(new CreateRagEvaluationCaseRequest("질문", List.of())))
-                .isInstanceOf(RagEvaluationValidationException.class);
-
         RagEvaluationCase saved = service.create(
                 new CreateRagEvaluationCaseRequest(" 질문 ", List.of(" A.md ", "A.md", "B.md")));
         assertThat(saved.query()).isEqualTo("질문");
         assertThat(saved.expectedDocumentPaths()).containsExactly("A.md", "B.md");
+    }
+
+    @Test
+    void 기대_문서가_없는_부정_평가를_저장하고_결과_없음을_확인한다() {
+        RecordingRepository repository = new RecordingRepository();
+        RagEvaluationService service = service(repository, new RecordingVectorStore());
+
+        RagEvaluationCase evaluationCase = service.create(
+                new CreateRagEvaluationCaseRequest("문서에 없는 질문", List.of()));
+        RagEvaluationRunResponse response = service.run(evaluationCase.id());
+
+        assertThat(evaluationCase.expectedDocumentPaths()).isEmpty();
+        assertThat(response.modes()).allSatisfy(mode -> {
+            assertThat(mode.results()).isEmpty();
+            assertThat(mode.recallAtLimit()).isZero();
+            assertThat(mode.firstRelevantRank()).isNull();
+        });
     }
 
     private RagEvaluationService service(RecordingRepository repository, RecordingVectorStore vectorStore) {

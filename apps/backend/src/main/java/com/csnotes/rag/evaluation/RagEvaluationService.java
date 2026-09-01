@@ -51,9 +51,6 @@ public final class RagEvaluationService {
                     .map(String::strip)
                     .forEach(expectedPaths::add);
         }
-        if (expectedPaths.isEmpty()) {
-            throw new RagEvaluationValidationException("기대 문서를 한 개 이상 선택해 주세요.");
-        }
         RagEvaluationCase evaluationCase = new RagEvaluationCase(
                 UUID.randomUUID(), request.query().strip(), List.copyOf(expectedPaths), clock.instant());
         repository.save(evaluationCase);
@@ -75,9 +72,10 @@ public final class RagEvaluationService {
     }
 
     private RagEvaluationModeResult evaluateMode(RagEvaluationCase evaluationCase, RagSearchMode mode) {
-        // 최소 점수를 0으로 통일해 검색 방식별 후보 누락이 아닌 순위 품질 자체를 비교한다.
+        boolean negativeCase = evaluationCase.expectedDocumentPaths().isEmpty();
+        // 긍정 평가는 순위 자체를 비교하고, 부정 평가는 운영 기본 임계값으로 불필요한 결과가 노출되는지 확인한다.
         RagSearchResponse response = searchService.search(
-                new RagSearchRequest(evaluationCase.query(), resultLimit, 0.0, mode));
+                new RagSearchRequest(evaluationCase.query(), resultLimit, negativeCase ? null : 0.0, mode));
         Set<String> expected = Set.copyOf(evaluationCase.expectedDocumentPaths());
         List<String> retrievedRelevantPaths = response.results().stream()
                 .map(RagSearchHit::documentPath)
@@ -91,7 +89,8 @@ public final class RagEvaluationService {
                 break;
             }
         }
-        double recall = (double) retrievedRelevantPaths.size() / expected.size();
+        // 부정 평가에서는 UI가 결과 유무를 직접 표시하므로 0으로 두어 0/0에 의한 NaN 직렬화를 막는다.
+        double recall = negativeCase ? 0 : (double) retrievedRelevantPaths.size() / expected.size();
         double reciprocalRank = firstRelevantRank == null ? 0 : 1.0 / firstRelevantRank;
         return new RagEvaluationModeResult(mode, recall, firstRelevantRank, reciprocalRank, response.results());
     }

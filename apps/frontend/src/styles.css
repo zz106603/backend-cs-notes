@@ -476,6 +476,7 @@ kbd { padding: 2px 7px; border: 1px solid #d8dad4; border-radius: 5px; backgroun
 .evaluation-create-panel h2, .evaluation-case-section h2, .evaluation-results h2 { margin: 5px 0 18px; font-size: 18px; }
 .evaluation-create-panel > label { display: grid; gap: 7px; margin-bottom: 15px; }
 .evaluation-create-panel > label > span, .evaluation-document-picker > span { color: var(--muted); font-size: 10px; font-weight: 700; }
+.evaluation-document-picker > span small { margin-left: 6px; font-size: 8px; font-weight: 500; }
 .evaluation-create-panel input { width: 100%; box-sizing: border-box; border: 1px solid var(--line); border-radius: 9px; background: var(--canvas); color: var(--ink); outline: 0; }
 .evaluation-create-panel > label input { padding: 12px 13px; font-size: 12px; }
 .evaluation-document-picker { display: grid; gap: 8px; margin-bottom: 16px; }
@@ -513,14 +514,18 @@ kbd { padding: 2px 7px; border: 1px solid #d8dad4; border-radius: 5px; backgroun
 .evaluation-metrics span { overflow: hidden; color: var(--muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .evaluation-metrics strong { margin-top: 4px; font-family: 'DM Mono', monospace; font-size: 12px; }
 .evaluation-ranking { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
-.evaluation-ranking li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 7px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; }
+.evaluation-ranking li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; gap: 7px; padding: 9px 8px; border: 1px solid var(--line); border-radius: 7px; }
 .evaluation-ranking li.relevant { border-color: var(--accent); background: var(--accent-soft); }
-.evaluation-ranking li > span { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; }
-.evaluation-ranking li > div { min-width: 0; }
-.evaluation-ranking strong, .evaluation-ranking small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.evaluation-ranking strong { font-size: 9px; }
-.evaluation-ranking small { margin-top: 3px; color: var(--muted); font-size: 7px; }
-.evaluation-ranking svg { color: var(--accent); }
+.evaluation-ranking .evaluation-rank { padding-top: 2px; color: var(--muted); font-family: 'DM Mono', monospace; font-size: 9px; }
+.evaluation-hit { min-width: 0; }
+.evaluation-hit strong, .evaluation-hit-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation-hit strong { font-size: 10px; }
+.evaluation-hit-path { margin-top: 3px; color: var(--muted); font-size: 8px; }
+.evaluation-hit-meta { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 7px; }
+.evaluation-hit-meta span { overflow: hidden; color: var(--text); font-size: 8px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation-hit-meta code { flex: none; padding: 2px 4px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--panel); font-family: 'DM Mono', monospace; font-size: 7px; }
+.evaluation-hit p { display: -webkit-box; overflow: hidden; margin: 5px 0 0; color: var(--muted); font-size: 8px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.evaluation-ranking svg { margin-top: 1px; color: var(--accent); }
 .indexing-hero { padding: 25px 0 28px; }
 .indexing-hero h1 { margin: 18px 0 11px; font-family: 'Noto Sans KR', sans-serif; font-size: clamp(38px, 5vw, 54px); line-height: 1.15; letter-spacing: -.045em; }
 .indexing-hero > p { max-width: 680px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.75; }
