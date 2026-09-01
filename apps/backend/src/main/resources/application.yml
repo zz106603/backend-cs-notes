@@ -54,6 +54,9 @@ rag:
     hybrid-rrf-k: ${RAG_SEARCH_HYBRID_RRF_K:60}
     query-cache-ttl: ${RAG_SEARCH_QUERY_CACHE_TTL:10m}
     query-cache-max-entries: ${RAG_SEARCH_QUERY_CACHE_MAX_ENTRIES:100}
+  reranking:
+    enabled: ${RAG_RERANKING_ENABLED:false}
+    minimum-score: ${RAG_RERANKING_MINIMUM_SCORE:0.0}
   evaluation:
     enabled: ${RAG_EVALUATION_ENABLED:true}
     result-limit: ${RAG_EVALUATION_RESULT_LIMIT:10}

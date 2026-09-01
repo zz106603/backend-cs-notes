@@ -4,6 +4,7 @@ import com.csnotes.rag.embedding.EmbeddingProvider;
 import com.csnotes.rag.embedding.EmbeddingVector;
 import com.csnotes.rag.persistence.ChunkSearchResult;
 import com.csnotes.rag.persistence.ChunkVectorStore;
+import com.csnotes.rag.reranking.RagRerankingService;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -24,6 +25,7 @@ public final class RagSearchService {
     private final double defaultSparseMinimumScore;
     private final int hybridCandidateLimit;
     private final int hybridRrfK;
+    private final RagRerankingService rerankingService;
     private final long cacheTtlNanos;
     private final int cacheMaxEntries;
     private final Map<String, CachedEmbedding> queryCache = new LinkedHashMap<>(16, 0.75f, true);
@@ -38,6 +40,7 @@ public final class RagSearchService {
             double defaultSparseMinimumScore,
             int hybridCandidateLimit,
             int hybridRrfK,
+            RagRerankingService rerankingService,
             Duration cacheTtl,
             int cacheMaxEntries
     ) {
@@ -50,6 +53,7 @@ public final class RagSearchService {
         this.defaultSparseMinimumScore = defaultSparseMinimumScore;
         this.hybridCandidateLimit = hybridCandidateLimit;
         this.hybridRrfK = hybridRrfK;
+        this.rerankingService = rerankingService;
         this.cacheTtlNanos = cacheTtl.toNanos();
         this.cacheMaxEntries = cacheMaxEntries;
     }
@@ -92,7 +96,10 @@ public final class RagSearchService {
             // Sparse 점수는 Dense 유사도와 척도가 다르므로 Dense 최소 점수를 적용하지 않는다.
             List<ChunkSearchResult> sparseResults = vectorStore.searchSparse(
                     query, candidateLimit, defaultSparseMinimumScore);
-            List<RagSearchHit> results = reciprocalRankFusion(denseResults, sparseResults, limit);
+            // RRF는 후보를 넓게 정리하고, Reranker가 있으면 질문과 본문을 직접 비교한 뒤 최종 limit만 남긴다.
+            List<RagSearchHit> fusedCandidates = reciprocalRankFusion(
+                    denseResults, sparseResults, candidateLimit);
+            List<RagSearchHit> results = rerankingService.rerank(query, fusedCandidates, limit);
             return new RagSearchResponse(query, embeddingProvider.modelName(), mode, limit, minimumScore,
                     lookup.cached(), results);
         }
@@ -177,7 +184,8 @@ public final class RagSearchService {
             // 정규화는 표시값만 바꾸며 모든 후보에 같은 값을 나누므로 최종 순서는 변하지 않는다.
             return new RagSearchHit(chunk.id(), chunk.documentId(), chunk.documentTitle(),
                     chunk.documentPath(), chunk.tags(), chunk.sectionPath(), chunk.content(),
-                    rawScore / maximumRrfScore, denseScore, sparseScore, denseRank, sparseRank, matchedBy);
+                    rawScore / maximumRrfScore, denseScore, sparseScore, denseRank, sparseRank,
+                    null, null, matchedBy);
         }
     }
 

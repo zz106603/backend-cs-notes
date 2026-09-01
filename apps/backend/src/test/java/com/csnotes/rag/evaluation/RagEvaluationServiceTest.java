@@ -10,6 +10,7 @@ import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.persistence.EmbeddedChunk;
 import com.csnotes.rag.search.RagSearchMode;
 import com.csnotes.rag.search.RagSearchService;
+import com.csnotes.rag.reranking.RagRerankingService;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -82,7 +83,8 @@ class RagEvaluationServiceTest {
 
     private RagEvaluationService service(RecordingRepository repository, RecordingVectorStore vectorStore) {
         RagSearchService searchService = new RagSearchService(new TestEmbeddingProvider(), vectorStore,
-                5, 20, 500, 0.5, 0.0, 20, 60, Duration.ofMinutes(10), 100);
+                5, 20, 500, 0.5, 0.0, 20, 60, RagRerankingService.disabled(),
+                Duration.ofMinutes(10), 100);
         return new RagEvaluationService(repository, searchService, 10,
                 Clock.fixed(Instant.parse("2026-08-28T00:00:00Z"), ZoneOffset.UTC));
     }

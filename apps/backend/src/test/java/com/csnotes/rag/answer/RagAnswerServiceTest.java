@@ -9,6 +9,7 @@ import com.csnotes.rag.persistence.ChunkSearchResult;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.persistence.EmbeddedChunk;
 import com.csnotes.rag.search.RagSearchService;
+import com.csnotes.rag.reranking.RagRerankingService;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -144,7 +145,7 @@ class RagAnswerServiceTest {
     ) {
         RagSearchService searchService = new RagSearchService(
                 new TestEmbeddingProvider(), store, 5, 20, 500, 0.3, 0.0,
-                20, 60, Duration.ofMinutes(10), 100
+                20, 60, RagRerankingService.disabled(), Duration.ofMinutes(10), 100
         );
         return new RagAnswerService(searchService, generator, 4, 6, maxContextCharacters,
                 0.3, Duration.ofMinutes(10), 100, usageStore,

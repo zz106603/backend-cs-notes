@@ -8,6 +8,10 @@ import com.csnotes.rag.embedding.EmbeddingVector;
 import com.csnotes.rag.persistence.ChunkSearchResult;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.persistence.EmbeddedChunk;
+import com.csnotes.rag.reranking.RagRerankingService;
+import com.csnotes.rag.reranking.ChunkRerankCandidate;
+import com.csnotes.rag.reranking.ChunkRerankScore;
+import com.csnotes.rag.reranking.ChunkReranker;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -98,6 +102,25 @@ class RagSearchServiceTest {
     }
 
     @Test
+    void 통합_검색은_최종_개수보다_넓은_RRF_후보를_Reranker에_전달한다() {
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        store.denseResults = List.of(result("의미 A", 0.91), result("의미 B", 0.82));
+        store.sparseResults = List.of(result("키워드 C", 0.76), result("키워드 D", 0.65));
+        RecordingChunkReranker reranker = new RecordingChunkReranker();
+        RagSearchService service = service(provider, store,
+                new RagRerankingService(true, reranker, 0.0));
+
+        RagSearchResponse response = service.search(
+                new RagSearchRequest("트랜잭션", 2, 0.5, RagSearchMode.HYBRID));
+
+        assertThat(reranker.candidates).hasSize(4);
+        assertThat(response.results()).extracting(RagSearchHit::content)
+                .containsExactly("키워드 D", "의미 B");
+        assertThat(response.results()).extracting(RagSearchHit::rerankRank).containsExactly(1, 2);
+    }
+
+    @Test
     void 검색어와_결과_개수와_최소_유사도를_API_호출_전에_검증한다() {
         RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
         RecordingVectorStore store = new RecordingVectorStore();
@@ -113,8 +136,16 @@ class RagSearchServiceTest {
     }
 
     private RagSearchService service(RecordingEmbeddingProvider provider, RecordingVectorStore store) {
+        return service(provider, store, RagRerankingService.disabled());
+    }
+
+    private RagSearchService service(
+            RecordingEmbeddingProvider provider,
+            RecordingVectorStore store,
+            RagRerankingService rerankingService
+    ) {
         return new RagSearchService(provider, store, 5, 20, 500, 0.5, 0.0,
-                20, 60, Duration.ofMinutes(10), 100);
+                20, 60, rerankingService, Duration.ofMinutes(10), 100);
     }
 
     private ChunkSearchResult result(String content, double score) {
@@ -168,6 +199,22 @@ class RagSearchServiceTest {
             this.minimumScore = minimumScore;
             this.sparseMinimumScore = minimumScore;
             return sparseResults;
+        }
+    }
+
+    private static final class RecordingChunkReranker implements ChunkReranker {
+        private List<ChunkRerankCandidate> candidates = List.of();
+
+        @Override public String modelName() { return "test-reranker"; }
+
+        @Override
+        public List<ChunkRerankScore> rerank(String query, List<ChunkRerankCandidate> candidates) {
+            this.candidates = List.copyOf(candidates);
+            List<ChunkRerankScore> scores = new ArrayList<>();
+            for (int index = candidates.size() - 1; index >= 0; index--) {
+                scores.add(new ChunkRerankScore(candidates.get(index).chunkId(), 0.5 + index * 0.1));
+            }
+            return scores;
         }
     }
 }
