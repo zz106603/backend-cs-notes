@@ -50,6 +50,8 @@ export interface RagSearchHit {
   sparseScore: number | null
   denseRank: number | null
   sparseRank: number | null
+  rerankScore: number | null
+  rerankRank: number | null
   matchedBy: Array<'DENSE' | 'SPARSE'>
 }
 
