@@ -71,7 +71,7 @@ export function RagEvaluationPage() {
           <input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="예: 새로운 트랜잭션으로 분리해서 실행하려면?" maxLength={500} />
         </label>
         <div className="evaluation-document-picker">
-          <span>기대 문서</span>
+          <span>기대 문서 <small>선택하지 않으면 결과가 없어야 하는 부정 평가로 저장됩니다.</small></span>
           <div className="evaluation-document-search"><Search size={15} /><input value={documentQuery} onChange={(event) => setDocumentQuery(event.target.value)} placeholder="문서 제목 또는 경로 검색" /></div>
           <div className="evaluation-document-options">
             {filteredDocuments.map((document) => {
@@ -85,7 +85,7 @@ export function RagEvaluationPage() {
             {expectedPaths.map((path) => <span key={path}>{path}<button type="button" aria-label={`${path} 선택 해제`} onClick={() => toggleExpectedPath(path)}><X size={11} /></button></span>)}
           </div>}
         </div>
-        <button className="primary-button" type="button" disabled={!question.trim() || expectedPaths.length === 0 || create.isPending} onClick={() => create.mutate()}>
+        <button className="primary-button" type="button" disabled={!question.trim() || create.isPending} onClick={() => create.mutate()}>
           <Plus size={15} /> {create.isPending ? '저장 중' : '평가 케이스 저장'}
         </button>
       </section>
@@ -96,7 +96,7 @@ export function RagEvaluationPage() {
         {cases.data?.length === 0 && <div className="evaluation-empty"><FlaskConical size={25} /><p>첫 평가 질문과 기대 문서를 등록해 보세요.</p></div>}
         <div className="evaluation-case-list">
           {cases.data?.map((evaluationCase) => <article className="evaluation-case" key={evaluationCase.id}>
-            <div><strong>{evaluationCase.query}</strong><p>{evaluationCase.expectedDocumentPaths.join(' · ')}</p></div>
+            <div><strong>{evaluationCase.query}</strong><p>{evaluationCase.expectedDocumentPaths.length > 0 ? evaluationCase.expectedDocumentPaths.join(' · ') : '관련 문서 없음 · 부정 평가'}</p></div>
             <div className="evaluation-case-actions">
               <button type="button" className="secondary-button" disabled={run.isPending} onClick={() => run.mutate(evaluationCase.id)}><Play size={13} /> 비교 실행</button>
               <button type="button" className="icon-button" aria-label="평가 질문 삭제" onClick={() => deleteCase(evaluationCase.id)}><Trash2 size={14} /></button>
@@ -122,16 +122,34 @@ function EvaluationResult({ result }: { result: RagEvaluationRunResponse }) {
 }
 
 function ModeResult({ result, expected, limit }: { result: RagEvaluationModeResult; expected: Set<string>; limit: number }) {
+  const negativeCase = expected.size === 0
+  const hasCandidates = result.results.length > 0
   return <article className={`evaluation-mode evaluation-mode--${result.mode.toLowerCase()}`}>
     <header><span>{result.mode}</span><h3>{MODE_LABEL[result.mode]}</h3></header>
     <div className="evaluation-metrics">
-      <div><span>Recall@{limit}</span><strong>{(result.recallAtLimit * 100).toFixed(0)}%</strong></div>
-      <div><span>첫 정답 순위</span><strong>{result.firstRelevantRank ? `${result.firstRelevantRank}위` : '없음'}</strong></div>
-      <div><span>Reciprocal Rank</span><strong>{result.reciprocalRank.toFixed(3)}</strong></div>
+      {negativeCase ? <>
+        <div><span>부정 질문 진단</span><strong>{hasCandidates ? '관련성 판정 필요' : '후보 없음'}</strong></div>
+        <div><span>반환 결과</span><strong>{result.results.length}개</strong></div>
+        <div><span>판정 기준</span><strong>후보 관찰</strong></div>
+      </> : <>
+        <div><span>Recall@{limit}</span><strong>{(result.recallAtLimit * 100).toFixed(0)}%</strong></div>
+        <div><span>첫 정답 순위</span><strong>{result.firstRelevantRank ? `${result.firstRelevantRank}위` : '없음'}</strong></div>
+        <div><span>Reciprocal Rank</span><strong>{result.reciprocalRank.toFixed(3)}</strong></div>
+      </>}
     </div>
     <ol className="evaluation-ranking">
       {result.results.map((hit, index) => <li className={expected.has(hit.documentPath) ? 'relevant' : ''} key={hit.chunkId}>
-        <span>{index + 1}</span><div><strong>{hit.documentTitle}</strong><small>{hit.documentPath}</small></div>{expected.has(hit.documentPath) && <Check size={14} />}
+        <span className="evaluation-rank">{index + 1}</span>
+        <div className="evaluation-hit">
+          <strong>{hit.documentTitle}</strong>
+          <small className="evaluation-hit-path">{hit.documentPath}</small>
+          <div className="evaluation-hit-meta">
+            <span>{hit.sectionPath.length > 0 ? hit.sectionPath.join(' › ') : '문서 본문'}</span>
+            <code title={hit.chunkId}>Chunk {hit.chunkId.slice(0, 8)}</code>
+          </div>
+          <p title={hit.content}>{hit.content.replace(/\s+/g, ' ').trim()}</p>
+        </div>
+        {expected.has(hit.documentPath) && <Check size={14} aria-label="기대 문서" />}
       </li>)}
     </ol>
   </article>
