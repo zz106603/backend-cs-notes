@@ -141,3 +141,5 @@ cosine 유사도는 이론적으로 -1~1 범위이며 1에 가까울수록 방�
 ## 다음 단계
 
 문서 작성·수정·휴지통 이벤트를 Chunk 생성과 임베딩 동기화에 연결한다. 이후 동일한 질의 집합으로 한국어 검색 품질, 비용, 응답 시간을 기록한다.
+
+Reranker의 모델 선택, Trial Key 제한, 장애 fallback, 평가 및 Python Cross-Encoder 비교 결정은 [Cohere Reranker 도입 정책](cohere-reranker-policy.md)에 별도로 기록한다.
