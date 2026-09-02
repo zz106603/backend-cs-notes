@@ -57,6 +57,16 @@ rag:
   reranking:
     enabled: ${RAG_RERANKING_ENABLED:false}
     minimum-score: ${RAG_RERANKING_MINIMUM_SCORE:0.0}
+    cohere:
+      api-key: ${COHERE_API_KEY:}
+      base-url: ${COHERE_BASE_URL:https://api.cohere.com}
+      model: ${COHERE_RERANK_MODEL:rerank-v4.0-fast}
+      max-tokens-per-document: ${COHERE_RERANK_MAX_TOKENS_PER_DOCUMENT:1024}
+      connect-timeout: ${COHERE_RERANK_CONNECT_TIMEOUT:2s}
+      read-timeout: ${COHERE_RERANK_READ_TIMEOUT:5s}
+      cache-ttl: ${COHERE_RERANK_CACHE_TTL:10m}
+      cache-max-entries: ${COHERE_RERANK_CACHE_MAX_ENTRIES:100}
+      max-requests-per-minute: ${COHERE_RERANK_MAX_REQUESTS_PER_MINUTE:8}
   evaluation:
     enabled: ${RAG_EVALUATION_ENABLED:true}
     result-limit: ${RAG_EVALUATION_RESULT_LIMIT:10}

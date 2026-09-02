@@ -17,10 +17,17 @@ function toRagMode(mode: Exclude<SearchMode, 'general'>) {
 }
 
 function matchedByLabel(hit: RagSearchHit) {
+  if (hit.rerankScore !== null && hit.rerankRank !== null) {
+    return `재정렬 ${hit.rerankRank}위 · ${hit.rerankScore.toFixed(3)}`
+  }
   return [
     hit.denseRank ? `의미 ${hit.denseRank}위` : null,
     hit.sparseRank ? `키워드 ${hit.sparseRank}위` : null,
   ].filter(Boolean).join(' · ')
+}
+
+function effectiveScore(hit: RagSearchHit) {
+  return hit.rerankScore ?? hit.score
 }
 
 function formatDate(value: string) {
@@ -34,13 +41,16 @@ function groupSemanticResults(results: RagSearchHit[]) {
     path: string
     tags: string[]
     bestScore: number
+    reranked: boolean
     hits: RagSearchHit[]
   }>()
 
   results.forEach((hit) => {
+    const score = effectiveScore(hit)
     const existing = grouped.get(hit.documentId)
     if (existing) {
-      existing.bestScore = Math.max(existing.bestScore, hit.score)
+      existing.bestScore = Math.max(existing.bestScore, score)
+      existing.reranked ||= hit.rerankScore !== null
       existing.hits.push(hit)
       return
     }
@@ -49,7 +59,8 @@ function groupSemanticResults(results: RagSearchHit[]) {
       title: hit.documentTitle,
       path: hit.documentPath,
       tags: hit.tags,
-      bestScore: hit.score,
+      bestScore: score,
+      reranked: hit.rerankScore !== null,
       hits: [hit],
     })
   })
@@ -238,7 +249,7 @@ export function DocumentListPage() {
               <article className="semantic-result-card" key={document.documentId}>
                 <header>
                   <div>
-                    <span className="semantic-score">{searchMode === 'hybrid' ? '통합 관련도' : '관련도'} {(document.bestScore * 100).toFixed(1)}%</span>
+                    <span className="semantic-score">{document.reranked ? '재정렬 관련도' : searchMode === 'hybrid' ? '통합 관련도' : '관련도'} {(document.bestScore * 100).toFixed(1)}%</span>
                     <h3>{document.title}</h3>
                     <p>{document.path}</p>
                   </div>

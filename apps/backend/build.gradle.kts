@@ -39,7 +39,20 @@ tasks.withType<Test> {
 
 tasks.named<Test>("test") {
     useJUnitPlatform {
-        excludeTags("openai-live", "rag-search-live", "rag-answer-live")
+        excludeTags("openai-live", "rag-search-live", "rag-answer-live", "cohere-live")
+    }
+}
+
+tasks.register<Test>("cohereRerankerLiveTest") {
+    description = "실제 Cohere Trial API로 한국어 Chunk 재정렬을 확인합니다."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("cohere-live")
+    }
+    onlyIf("COHERE_API_KEY 환경 변수가 설정되어 있어야 합니다.") {
+        !System.getenv("COHERE_API_KEY").isNullOrBlank()
     }
 }
 

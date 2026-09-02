@@ -55,6 +55,31 @@ class RagRerankingServiceTest {
                 .hasMessageContaining("unknown");
     }
 
+    @Test
+    void 활성화해도_구현체가_없으면_RRF_결과로_fallback한다() {
+        RagRerankingService service = new RagRerankingService(true, null, 0.0);
+
+        List<RagSearchHit> results = service.rerank("질문", List.of(hit("a"), hit("b")), 1);
+
+        assertThat(results).extracting(RagSearchHit::chunkId).containsExactly("a");
+    }
+
+    @Test
+    void 외부_Reranker를_사용할_수_없으면_RRF_결과로_fallback한다() {
+        ChunkReranker unavailable = new ChunkReranker() {
+            @Override public String modelName() { return "unavailable-model"; }
+            @Override public List<ChunkRerankScore> rerank(String query, List<ChunkRerankCandidate> candidates) {
+                throw new ChunkRerankerUnavailableException("HTTP_429");
+            }
+        };
+        RagRerankingService service = new RagRerankingService(true, unavailable, 0.0);
+
+        List<RagSearchHit> results = service.rerank("질문", List.of(hit("a"), hit("b")), 2);
+
+        assertThat(results).extracting(RagSearchHit::chunkId).containsExactly("a", "b");
+        assertThat(results).allSatisfy(hit -> assertThat(hit.rerankScore()).isNull());
+    }
+
     private RagSearchHit hit(String chunkId) {
         return new RagSearchHit(chunkId, "doc-" + chunkId, "문서 " + chunkId, "경로/" + chunkId + ".md",
                 List.of(), List.of("섹션"), "본문 " + chunkId, 0.5,

@@ -146,6 +146,8 @@ function ModeResult({ result, expected, limit }: { result: RagEvaluationModeResu
           <div className="evaluation-hit-meta">
             <span>{hit.sectionPath.length > 0 ? hit.sectionPath.join(' › ') : '문서 본문'}</span>
             <code title={hit.chunkId}>Chunk {hit.chunkId.slice(0, 8)}</code>
+            {hit.rerankScore !== null && hit.rerankRank !== null &&
+              <code>Rerank {hit.rerankRank}위 · {hit.rerankScore.toFixed(3)}</code>}
           </div>
           <p title={hit.content}>{hit.content.replace(/\s+/g, ' ').trim()}</p>
         </div>

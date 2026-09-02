@@ -14,7 +14,9 @@ public record RagAnswerSource(
         double score
 ) {
     static RagAnswerSource from(int number, RagSearchHit hit) {
+        // Reranker가 적용된 경우 출처 화면에도 최종 관련성 점수를 표시하고, 미적용·fallback이면 기존 검색 점수를 사용한다.
+        double effectiveScore = hit.rerankScore() == null ? hit.score() : hit.rerankScore();
         return new RagAnswerSource(number, hit.chunkId(), hit.documentId(), hit.documentTitle(),
-                hit.documentPath(), hit.sectionPath(), hit.score());
+                hit.documentPath(), hit.sectionPath(), effectiveScore);
     }
 }
