@@ -10,6 +10,10 @@ import type { RagSearchHit } from '../types'
 
 type SearchMode = 'general' | 'hybrid' | 'dense' | 'sparse'
 
+function effectiveScore(hit: RagSearchHit) {
+  return hit.rerankScore ?? hit.score
+}
+
 function groupSemanticResults(results: RagSearchHit[]) {
   const grouped = new Map<string, {
     documentId: string
@@ -19,13 +23,14 @@ function groupSemanticResults(results: RagSearchHit[]) {
     sectionPath: string[]
   }>()
   results.forEach((hit) => {
+    const score = effectiveScore(hit)
     const existing = grouped.get(hit.documentId)
-    if (!existing || hit.score > existing.bestScore) {
+    if (!existing || score > existing.bestScore) {
       grouped.set(hit.documentId, {
         documentId: hit.documentId,
         title: hit.documentTitle,
         path: hit.documentPath,
-        bestScore: hit.score,
+        bestScore: score,
         sectionPath: hit.sectionPath,
       })
     }

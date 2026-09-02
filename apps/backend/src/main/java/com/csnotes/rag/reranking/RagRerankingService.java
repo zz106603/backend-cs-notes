@@ -1,6 +1,8 @@
 package com.csnotes.rag.reranking;
 
 import com.csnotes.rag.search.RagSearchHit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -12,20 +14,21 @@ import java.util.Set;
 
 /** 모델 호출 구현과 검색 흐름 사이에서 점수 검증, 필터링, 재정렬을 담당한다. */
 public final class RagRerankingService {
+    private static final Logger log = LoggerFactory.getLogger(RagRerankingService.class);
     private final boolean enabled;
     private final ChunkReranker reranker;
     private final double minimumScore;
 
     public RagRerankingService(boolean enabled, ChunkReranker reranker, double minimumScore) {
-        if (enabled && reranker == null) {
-            throw new IllegalArgumentException("Enabled reranking requires a ChunkReranker");
-        }
         if (!Double.isFinite(minimumScore) || minimumScore < 0 || minimumScore > 1) {
             throw new IllegalArgumentException("Reranking minimum score must be between 0 and 1");
         }
         this.enabled = enabled;
         this.reranker = reranker;
         this.minimumScore = minimumScore;
+        if (enabled && reranker == null) {
+            log.warn("Reranker가 활성화됐지만 사용할 구현체가 없어 기존 RRF 결과를 사용합니다.");
+        }
     }
 
     public static RagRerankingService disabled() {
@@ -37,14 +40,22 @@ public final class RagRerankingService {
      * 비활성 상태에서는 모델을 호출하지 않고 기존 RRF 순서를 그대로 사용한다.
      */
     public List<RagSearchHit> rerank(String query, List<RagSearchHit> candidates, int limit) {
-        if (!enabled) return candidates.stream().limit(limit).toList();
+        if (!enabled || reranker == null) return fallback(candidates, limit);
 
         // 모델 SDK에 RagSearchHit 전체를 넘기지 않아 검색 도메인과 외부 구현의 결합을 막는다.
         List<ChunkRerankCandidate> inputs = candidates.stream()
                 .map(hit -> new ChunkRerankCandidate(hit.chunkId(), hit.documentTitle(), hit.documentPath(),
                         hit.sectionPath(), hit.content()))
                 .toList();
-        List<ChunkRerankScore> scores = reranker.rerank(query, inputs);
+        List<ChunkRerankScore> scores;
+        try {
+            scores = reranker.rerank(query, inputs);
+        } catch (ChunkRerankerUnavailableException exception) {
+            // 외부 API 장애는 검색 자체의 장애로 전파하지 않고 이미 계산된 RRF 순서를 보존한다.
+            log.warn("외부 Reranker 사용 불가로 RRF fallback을 적용합니다: model={}, reason={}, candidates={}",
+                    reranker.modelName(), exception.reason(), candidates.size());
+            return fallback(candidates, limit);
+        }
         Map<String, RagSearchHit> hitsById = new HashMap<>();
         Map<String, Integer> originalRanks = new HashMap<>();
         for (int index = 0; index < candidates.size(); index++) {
@@ -84,6 +95,10 @@ public final class RagRerankingService {
             results.add(scored.hit().withRerank(scored.score(), index + 1));
         }
         return List.copyOf(results);
+    }
+
+    private List<RagSearchHit> fallback(List<RagSearchHit> candidates, int limit) {
+        return candidates.stream().limit(limit).toList();
     }
 
     private record ScoredHit(RagSearchHit hit, double score, int originalRank) {
