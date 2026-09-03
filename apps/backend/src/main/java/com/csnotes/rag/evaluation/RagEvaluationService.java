@@ -73,7 +73,8 @@ public final class RagEvaluationService {
 
     private RagEvaluationModeResult evaluateMode(RagEvaluationCase evaluationCase, RagSearchMode mode) {
         boolean negativeCase = evaluationCase.expectedDocumentPaths().isEmpty();
-        // 긍정 평가는 순위 자체를 비교하고, 부정 평가는 운영 기본 임계값으로 불필요한 결과가 노출되는지 확인한다.
+        // 긍정 평가의 0.0은 1차 Dense 후보를 넓게 확보하기 위한 값이며, Hybrid에는 별도 Reranker 임계값이 적용된다.
+        // 부정 평가는 각 검색 방식의 운영 기본값으로 불필요한 결과가 실제 노출되는지 확인한다.
         RagSearchResponse response = searchService.search(
                 new RagSearchRequest(evaluationCase.query(), resultLimit, negativeCase ? null : 0.0, mode));
         Set<String> expected = Set.copyOf(evaluationCase.expectedDocumentPaths());
@@ -92,6 +93,7 @@ public final class RagEvaluationService {
         // 부정 평가에서는 UI가 결과 유무를 직접 표시하므로 0으로 두어 0/0에 의한 NaN 직렬화를 막는다.
         double recall = negativeCase ? 0 : (double) retrievedRelevantPaths.size() / expected.size();
         double reciprocalRank = firstRelevantRank == null ? 0 : 1.0 / firstRelevantRank;
-        return new RagEvaluationModeResult(mode, recall, firstRelevantRank, reciprocalRank, response.results());
+        return new RagEvaluationModeResult(mode, recall, firstRelevantRank, reciprocalRank, response.results(),
+                response.rerankingApplied(), response.rerankingMinimumScore());
     }
 }

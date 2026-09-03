@@ -56,7 +56,7 @@ rag:
     query-cache-max-entries: ${RAG_SEARCH_QUERY_CACHE_MAX_ENTRIES:100}
   reranking:
     enabled: ${RAG_RERANKING_ENABLED:false}
-    minimum-score: ${RAG_RERANKING_MINIMUM_SCORE:0.0}
+    minimum-score: ${RAG_RERANKING_MINIMUM_SCORE:0.65}
     cohere:
       api-key: ${COHERE_API_KEY:}
       base-url: ${COHERE_BASE_URL:https://api.cohere.com}

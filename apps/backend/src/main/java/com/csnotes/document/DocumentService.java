@@ -32,7 +32,10 @@ import java.util.stream.Collectors;
 public class DocumentService {
 
     private static final String TRASH_DIRECTORY = ".trash";
-    private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(".git", ".idea", ".agents", ".codex", ".trash", "apps");
+    private static final String EMPTY_DIRECTORY_MARKER = ".gitkeep";
+    private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(
+            ".git", ".gradle", ".idea", ".agents", ".codex", ".trash", "apps", "build", "docs", "gradle"
+    );
     private static final Set<String> WINDOWS_RESERVED_NAMES = Set.of(
             "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
             "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
@@ -58,6 +61,60 @@ public class DocumentService {
 
     public List<DocumentModels.CategoryResponse> findCategories() {
         return currentIndex().categories();
+    }
+
+    public DocumentModels.CategoryResponse createCategory(DocumentModels.CreateCategoryRequest request) {
+        synchronized (refreshLock) {
+            String category = validateCategoryPath(request.path());
+            Path target = resolveCategoryPath(category);
+            if (Files.exists(target)) {
+                throw new DocumentConflictException("같은 경로의 폴더가 이미 있습니다.");
+            }
+
+            try {
+                ensureCreatableDirectoryInsideRoot(target);
+                Files.createDirectories(target);
+                ensureRealDirectoryInsideRoot(target);
+                Files.writeString(target.resolve(EMPTY_DIRECTORY_MARKER), "", StandardCharsets.UTF_8);
+                rebuildAfterMutation();
+                return findCategory(category);
+            } catch (IOException exception) {
+                throw new DocumentReadException("폴더를 생성하는 중 오류가 발생했습니다.", exception);
+            }
+        }
+    }
+
+    /** 폴더 자체를 이동하므로 하위 폴더와 문서도 새 경로로 함께 이동한다. */
+    public DocumentModels.CategoryResponse updateCategory(DocumentModels.UpdateCategoryRequest request) {
+        synchronized (refreshLock) {
+            String category = validateCategoryPath(request.path());
+            String newCategory = validateCategoryPath(request.newPath());
+            Path source = resolveCategoryPath(category);
+            Path target = resolveCategoryPath(newCategory);
+            if (!Files.isDirectory(source) || Files.isSymbolicLink(source)) {
+                throw new DocumentNotFoundException("수정할 폴더를 찾을 수 없습니다.");
+            }
+            if (source.equals(target)) {
+                return findCategory(category);
+            }
+            if (target.startsWith(source)) {
+                throw new InvalidDocumentPathException("폴더를 자기 하위 경로로 이동할 수 없습니다.");
+            }
+            if (Files.exists(target)) {
+                throw new DocumentConflictException("이동할 위치에 동일한 폴더가 이미 있습니다.");
+            }
+
+            try {
+                ensureCreatableDirectoryInsideRoot(target.getParent());
+                Files.createDirectories(target.getParent());
+                ensureRealParentInsideRoot(target);
+                moveWithoutReplacing(source, target);
+                rebuildAfterMutation();
+                return findCategory(newCategory);
+            } catch (IOException exception) {
+                throw new DocumentReadException("폴더를 수정하는 중 오류가 발생했습니다.", exception);
+            }
+        }
     }
 
     /** 제목·경로·태그·본문의 관련도 점수를 계산해 검색 결과를 정렬한다. */
@@ -167,6 +224,51 @@ public class DocumentService {
                 throw exception;
             } catch (IOException exception) {
                 throw new DocumentReadException("문서를 수정하는 중 오류가 발생했습니다.", exception);
+            }
+        }
+    }
+
+    public DocumentModels.DocumentDetailResponse moveDocument(
+            String id,
+            DocumentModels.MoveDocumentRequest request
+    ) {
+        synchronized (refreshLock) {
+            DocumentMetadata metadata = currentIndex().documentsById().get(id);
+            if (metadata == null) {
+                throw new DocumentNotFoundException("이동할 문서를 찾을 수 없습니다.");
+            }
+            Path source = documentRoot.resolve(metadata.relativePath()).normalize();
+            if (!isReadableMarkdown(source)) {
+                throw new DocumentNotFoundException("이동할 문서 파일을 찾을 수 없습니다.");
+            }
+
+            try {
+                Instant actualUpdatedAt = Files.getLastModifiedTime(source).toInstant();
+                if (!actualUpdatedAt.equals(request.expectedUpdatedAt())) {
+                    throw new DocumentConflictException("다른 곳에서 문서가 수정되었습니다. 최신 내용을 다시 불러와 주세요.");
+                }
+                String category = validateCategoryPath(request.category());
+                Path target = resolveCategoryPath(category).resolve(source.getFileName()).normalize();
+                ensureInsideDocumentRoot(target);
+                if (source.equals(target)) {
+                    return detailForPath(source, Files.readString(source, StandardCharsets.UTF_8));
+                }
+                if (Files.exists(target)) {
+                    throw new DocumentConflictException("이동할 위치에 동일한 이름의 문서가 이미 있습니다.");
+                }
+
+                ensureCreatableDirectoryInsideRoot(target.getParent());
+                Files.createDirectories(target.getParent());
+                ensureRealParentInsideRoot(target);
+                moveWithoutReplacing(source, target);
+                Files.setLastModifiedTime(target, FileTime.from(Instant.now()));
+                String content = Files.readString(target, StandardCharsets.UTF_8);
+                rebuildAfterMutation();
+                return detailForPath(target, content);
+            } catch (DocumentConflictException | InvalidDocumentPathException exception) {
+                throw exception;
+            } catch (IOException exception) {
+                throw new DocumentReadException("문서를 이동하는 중 오류가 발생했습니다.", exception);
             }
         }
     }
@@ -286,6 +388,12 @@ public class DocumentService {
         return target;
     }
 
+    private Path resolveCategoryPath(String category) {
+        Path target = documentRoot.resolve(category).normalize();
+        ensureInsideDocumentRoot(target);
+        return target;
+    }
+
     private void ensureInsideDocumentRoot(Path path) {
         if (!path.startsWith(documentRoot) || path.equals(documentRoot)) {
             throw new InvalidDocumentPathException("문서 저장 경로가 올바르지 않습니다.");
@@ -297,6 +405,24 @@ public class DocumentService {
         Path realParent = target.getParent().toRealPath();
         if (!realParent.startsWith(realRoot)) {
             throw new InvalidDocumentPathException("문서 저장 경로가 문서 루트 밖을 가리키고 있습니다.");
+        }
+    }
+
+    private void ensureRealDirectoryInsideRoot(Path directory) throws IOException {
+        if (!directory.toRealPath().startsWith(documentRoot.toRealPath())) {
+            throw new InvalidDocumentPathException("폴더 경로가 문서 루트 밖을 가리키고 있습니다.");
+        }
+    }
+
+    /** createDirectories가 기존 심볼릭 링크를 따라 루트 밖에 폴더를 만들기 전에 가장 가까운 상위 경로를 검사한다. */
+    private void ensureCreatableDirectoryInsideRoot(Path directory) throws IOException {
+        Path existing = directory;
+        while (existing != null && !Files.exists(existing)) {
+            existing = existing.getParent();
+        }
+        if (existing == null || Files.isSymbolicLink(existing)
+                || !existing.toRealPath().startsWith(documentRoot.toRealPath())) {
+            throw new InvalidDocumentPathException("폴더 경로가 문서 루트 밖을 가리키고 있습니다.");
         }
     }
 
@@ -438,7 +564,7 @@ public class DocumentService {
 
             Map<String, DocumentMetadata> documentsById = documents.stream()
                     .collect(Collectors.toUnmodifiableMap(DocumentMetadata::id, document -> document));
-            List<DocumentModels.CategoryResponse> categories = buildCategoryTree(documents);
+            List<DocumentModels.CategoryResponse> categories = buildCategoryTree(documents, scanCategoryPaths());
 
             return new DocumentIndex(documents, documentsById, categories, true);
         } catch (IOException exception) {
@@ -446,8 +572,11 @@ public class DocumentService {
         }
     }
 
-    private List<DocumentModels.CategoryResponse> buildCategoryTree(List<DocumentMetadata> documents) {
-        Set<String> categoryPaths = new HashSet<>();
+    private List<DocumentModels.CategoryResponse> buildCategoryTree(
+            List<DocumentMetadata> documents,
+            Set<String> directoryPaths
+    ) {
+        Set<String> categoryPaths = new HashSet<>(directoryPaths);
         for (DocumentMetadata document : documents) {
             String[] segments = document.category().split("/");
             StringBuilder path = new StringBuilder();
@@ -460,6 +589,38 @@ public class DocumentService {
             }
         }
         return buildCategoryChildren("", categoryPaths, documents);
+    }
+
+    /** 문서가 아직 없는 새 폴더도 관리 화면과 사이드바에 노출하기 위해 실제 디렉터리를 수집한다. */
+    private Set<String> scanCategoryPaths() throws IOException {
+        Set<String> categories = new HashSet<>();
+        Files.walkFileTree(documentRoot, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes) {
+                if (directory.equals(documentRoot)) return FileVisitResult.CONTINUE;
+                if (isInExcludedDirectory(directory)) return FileVisitResult.SKIP_SUBTREE;
+                categories.add(toRelativePath(directory));
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        return categories;
+    }
+
+    private DocumentModels.CategoryResponse findCategory(String path) {
+        return findCategory(currentIndex().categories(), path)
+                .orElseThrow(() -> new DocumentReadException("변경한 폴더를 인덱스에서 찾을 수 없습니다."));
+    }
+
+    private Optional<DocumentModels.CategoryResponse> findCategory(
+            List<DocumentModels.CategoryResponse> categories,
+            String path
+    ) {
+        for (DocumentModels.CategoryResponse category : categories) {
+            if (category.path().equals(path)) return Optional.of(category);
+            Optional<DocumentModels.CategoryResponse> child = findCategory(category.children(), path);
+            if (child.isPresent()) return child;
+        }
+        return Optional.empty();
     }
 
     private List<DocumentModels.CategoryResponse> buildCategoryChildren(
@@ -636,7 +797,8 @@ public class DocumentService {
 
     private boolean isInExcludedDirectory(Path path) {
         Path relativePath = documentRoot.relativize(path);
-        return relativePath.getNameCount() >= 1 && EXCLUDED_DIRECTORIES.contains(relativePath.getName(0).toString());
+        return relativePath.getNameCount() >= 1
+                && EXCLUDED_DIRECTORIES.contains(relativePath.getName(0).toString().toLowerCase(Locale.ROOT));
     }
 
     private boolean isReadableMarkdown(Path path) {

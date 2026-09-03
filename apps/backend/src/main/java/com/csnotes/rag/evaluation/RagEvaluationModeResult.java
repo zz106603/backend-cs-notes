@@ -10,6 +10,8 @@ public record RagEvaluationModeResult(
         double recallAtLimit,
         Integer firstRelevantRank,
         double reciprocalRank,
-        List<RagSearchHit> results
+        List<RagSearchHit> results,
+        boolean rerankingApplied,
+        Double rerankingMinimumScore
 ) {
 }

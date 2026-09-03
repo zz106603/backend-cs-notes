@@ -63,6 +63,8 @@ export interface RagSearchResponse {
   minimumScore: number
   cachedQueryEmbedding: boolean
   results: RagSearchHit[]
+  rerankingApplied: boolean
+  rerankingMinimumScore: number | null
 }
 
 export interface RagAnswerSource {
@@ -134,6 +136,8 @@ export interface RagEvaluationModeResult {
   firstRelevantRank: number | null
   reciprocalRank: number
   results: RagSearchHit[]
+  rerankingApplied: boolean
+  rerankingMinimumScore: number | null
 }
 
 export interface RagEvaluationRunResponse {

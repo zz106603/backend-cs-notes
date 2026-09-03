@@ -9,6 +9,9 @@ import com.csnotes.rag.persistence.ChunkSearchResult;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.persistence.EmbeddedChunk;
 import com.csnotes.rag.search.RagSearchService;
+import com.csnotes.rag.reranking.ChunkRerankCandidate;
+import com.csnotes.rag.reranking.ChunkReranker;
+import com.csnotes.rag.reranking.ChunkRerankScore;
 import com.csnotes.rag.reranking.RagRerankingService;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +51,30 @@ class RagAnswerServiceTest {
         RagAnswerService service = service(generator, new RecordingVectorStore(List.of()), 2_000);
 
         RagAnswerResponse response = service.answer(new RagAnswerRequest("없는 내용", null, null));
+
+        assertThat(response.generated()).isFalse();
+        assertThat(response.sources()).isEmpty();
+        assertThat(generator.contexts).isEmpty();
+    }
+
+    @Test
+    void 모든_검색_근거가_Reranker_임계값보다_낮으면_채팅_모델을_호출하지_않는다() {
+        RecordingAnswerGenerator generator = new RecordingAnswerGenerator();
+        RecordingVectorStore store = new RecordingVectorStore(List.of(result("관련 없는 본문", 0.8)));
+        ChunkReranker lowScoreReranker = new ChunkReranker() {
+            @Override public String modelName() { return "test-reranker"; }
+            @Override public List<ChunkRerankScore> rerank(
+                    String query, List<ChunkRerankCandidate> candidates
+            ) {
+                return candidates.stream()
+                        .map(candidate -> new ChunkRerankScore(candidate.chunkId(), 0.55))
+                        .toList();
+            }
+        };
+        RagAnswerService service = service(generator, store, 2_000, new RecordingUsageStore(),
+                new RagRerankingService(true, lowScoreReranker, 0.65));
+
+        RagAnswerResponse response = service.answer(new RagAnswerRequest("문서에 없는 질문", null, null));
 
         assertThat(response.generated()).isFalse();
         assertThat(response.sources()).isEmpty();
@@ -143,9 +170,19 @@ class RagAnswerServiceTest {
             int maxContextCharacters,
             RecordingUsageStore usageStore
     ) {
+        return service(generator, store, maxContextCharacters, usageStore, RagRerankingService.disabled());
+    }
+
+    private RagAnswerService service(
+            RecordingAnswerGenerator generator,
+            RecordingVectorStore store,
+            int maxContextCharacters,
+            RecordingUsageStore usageStore,
+            RagRerankingService rerankingService
+    ) {
         RagSearchService searchService = new RagSearchService(
                 new TestEmbeddingProvider(), store, 5, 20, 500, 0.3, 0.0,
-                20, 60, RagRerankingService.disabled(), Duration.ofMinutes(10), 100
+                20, 60, rerankingService, Duration.ofMinutes(10), 100
         );
         return new RagAnswerService(searchService, generator, 4, 6, maxContextCharacters,
                 0.3, Duration.ofMinutes(10), 100, usageStore,

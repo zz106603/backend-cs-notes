@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, BookOpenText, CalendarDays, FileText, FolderOpen, Pencil, Trash2, Type } from 'lucide-react'
+import { ArrowLeft, BookOpenText, CalendarDays, FileInput, FileText, FolderOpen, Pencil, Trash2, Type, X } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
-import { isValidElement } from 'react'
+import { isValidElement, useMemo, useState } from 'react'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
@@ -11,6 +11,7 @@ import { api } from '../api'
 import { ErrorState } from '../components/ErrorState'
 import { LoadingState } from '../components/LoadingState'
 import { usePersistentState } from '../hooks/usePersistentState'
+import type { Category } from '../types'
 
 type ReadingSize = 'small' | 'default' | 'large'
 type ReadingWidth = 'compact' | 'default' | 'wide'
@@ -27,6 +28,10 @@ interface TableOfContentsItem {
   text: string
   id: string
   line: number
+}
+
+function flattenCategories(categories: Category[]): Category[] {
+  return categories.flatMap((category) => [category, ...flattenCategories(category.children)])
 }
 
 function plainText(node: ReactNode): string {
@@ -100,6 +105,10 @@ export function DocumentPage() {
     queryFn: () => api.document(documentId),
     enabled: Boolean(documentId),
   })
+  const { data: categories } = useQuery({ queryKey: ['categories'], queryFn: api.categories })
+  const categoryOptions = useMemo(() => flattenCategories(categories ?? []), [categories])
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [moveCategory, setMoveCategory] = useState('')
   const trashMutation = useMutation({
     mutationFn: () => api.moveDocumentToTrash(documentId),
     onSuccess: async () => {
@@ -108,6 +117,19 @@ export function DocumentPage() {
         queryClient.invalidateQueries({ queryKey: ['categories'] }),
       ])
       navigate('/notes', { replace: true })
+    },
+  })
+  const moveMutation = useMutation({
+    mutationFn: () => api.moveDocument(documentId, moveCategory, document!.updatedAt),
+    onSuccess: async (movedDocument) => {
+      queryClient.setQueryData(['document', movedDocument.id], movedDocument)
+      queryClient.removeQueries({ queryKey: ['document', documentId] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['documents'] }),
+        queryClient.invalidateQueries({ queryKey: ['categories'] }),
+      ])
+      setMoveOpen(false)
+      navigate(`/notes/${movedDocument.id}`, { replace: true })
     },
   })
 
@@ -135,6 +157,10 @@ export function DocumentPage() {
         </Link>
         <div>
           <Link to={`/notes/${document.id}/edit`} className="secondary-button"><Pencil size={15} /> 편집</Link>
+          <button type="button" className="secondary-button" onClick={() => {
+            setMoveCategory(document.category)
+            setMoveOpen(true)
+          }}><FileInput size={15} /> 이동</button>
           <button
             type="button"
             className="secondary-button secondary-button--danger"
@@ -149,6 +175,26 @@ export function DocumentPage() {
       </div>
 
       {trashMutation.error && <div className="editor-error" role="alert">{(trashMutation.error as Error).message}</div>}
+      {moveMutation.error && <div className="editor-error" role="alert">{(moveMutation.error as Error).message}</div>}
+
+      {moveOpen && <div className="management-backdrop" role="presentation" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setMoveOpen(false)
+      }}>
+        <section className="management-modal management-modal--compact" role="dialog" aria-modal="true" aria-labelledby="document-move-title">
+          <header>
+            <div><span>MOVE DOCUMENT</span><h2 id="document-move-title">문서 이동</h2></div>
+            <button type="button" aria-label="문서 이동 닫기" onClick={() => setMoveOpen(false)}><X size={17} /></button>
+          </header>
+          <p className="management-description"><strong>{document.title}</strong> 문서를 이동할 폴더를 선택하세요.</p>
+          <label className="management-select"><span>대상 폴더</span><select value={moveCategory} onChange={(event) => setMoveCategory(event.target.value)} autoFocus>
+            {categoryOptions.map((category) => <option value={category.path} key={category.path}>{category.path}</option>)}
+          </select></label>
+          <button className="primary-button management-submit" type="button" disabled={!moveCategory || moveCategory === document.category || moveMutation.isPending} onClick={() => moveMutation.mutate()}>
+            <FileInput size={14} /> {moveMutation.isPending ? '이동 중' : '이 폴더로 이동'}
+          </button>
+          <footer>문서 이동 후 벡터 검색 경로는 문서 색인을 다시 실행하면 갱신됩니다.</footer>
+        </section>
+      </div>}
 
       <section className="reading-controls" aria-label="읽기 설정">
         <div className="reading-controls__title"><Type size={16} /><span>읽기 설정</span></div>

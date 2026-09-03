@@ -39,7 +39,7 @@ public final class RagRerankingService {
      * RRF 후보를 모델 입력으로 변환하고 관련성 점수에 따라 다시 정렬한다.
      * 비활성 상태에서는 모델을 호출하지 않고 기존 RRF 순서를 그대로 사용한다.
      */
-    public List<RagSearchHit> rerank(String query, List<RagSearchHit> candidates, int limit) {
+    public RagRerankingResult rerank(String query, List<RagSearchHit> candidates, int limit) {
         if (!enabled || reranker == null) return fallback(candidates, limit);
 
         // 모델 SDK에 RagSearchHit 전체를 넘기지 않아 검색 도메인과 외부 구현의 결합을 막는다.
@@ -94,11 +94,11 @@ public final class RagRerankingService {
             // RRF 점수는 score에 보존하고 Reranker 점수와 새 순위는 별도 필드에 기록한다.
             results.add(scored.hit().withRerank(scored.score(), index + 1));
         }
-        return List.copyOf(results);
+        return RagRerankingResult.applied(results, minimumScore);
     }
 
-    private List<RagSearchHit> fallback(List<RagSearchHit> candidates, int limit) {
-        return candidates.stream().limit(limit).toList();
+    private RagRerankingResult fallback(List<RagSearchHit> candidates, int limit) {
+        return RagRerankingResult.fallback(candidates.stream().limit(limit).toList());
     }
 
     private record ScoredHit(RagSearchHit hit, double score, int originalRank) {

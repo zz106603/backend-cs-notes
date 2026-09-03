@@ -118,6 +118,25 @@ class RagSearchServiceTest {
         assertThat(response.results()).extracting(RagSearchHit::content)
                 .containsExactly("키워드 D", "의미 B");
         assertThat(response.results()).extracting(RagSearchHit::rerankRank).containsExactly(1, 2);
+        assertThat(response.rerankingApplied()).isTrue();
+        assertThat(response.rerankingMinimumScore()).isZero();
+    }
+
+    @Test
+    void 통합_검색은_Reranker_임계값을_통과한_Chunk가_없으면_빈_결과와_적용_기준을_반환한다() {
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        store.denseResults = List.of(result("의미 후보", 0.91));
+        store.sparseResults = List.of(result("키워드 후보", 0.76));
+        RagSearchService service = service(provider, store,
+                new RagRerankingService(true, new RecordingChunkReranker(), 0.85));
+
+        RagSearchResponse response = service.search(
+                new RagSearchRequest("문서에 없는 질문", 10, 0.0, RagSearchMode.HYBRID));
+
+        assertThat(response.results()).isEmpty();
+        assertThat(response.rerankingApplied()).isTrue();
+        assertThat(response.rerankingMinimumScore()).isEqualTo(0.85);
     }
 
     @Test
