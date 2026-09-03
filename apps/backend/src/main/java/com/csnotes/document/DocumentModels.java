@@ -20,6 +20,17 @@ public final class DocumentModels {
     ) {
     }
 
+    public record CreateCategoryRequest(
+            @NotBlank @Size(max = 100) String path
+    ) {
+    }
+
+    public record UpdateCategoryRequest(
+            @NotBlank @Size(max = 100) String path,
+            @NotBlank @Size(max = 100) String newPath
+    ) {
+    }
+
     public record DocumentSummaryResponse(
             String id,
             String title,
@@ -71,6 +82,12 @@ public final class DocumentModels {
         public UpdateDocumentRequest(String title, String category, String content, Instant expectedUpdatedAt) {
             this(title, category, content, List.of(), expectedUpdatedAt);
         }
+    }
+
+    public record MoveDocumentRequest(
+            @NotBlank @Size(max = 100) String category,
+            @NotNull Instant expectedUpdatedAt
+    ) {
     }
 
     public record TrashDocumentResponse(

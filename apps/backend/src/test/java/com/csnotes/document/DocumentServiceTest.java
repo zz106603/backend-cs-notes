@@ -39,6 +39,52 @@ class DocumentServiceTest {
     }
 
     @Test
+    void 빈_폴더를_생성하고_카테고리_트리에_노출한다() {
+        var created = documentService.createCategory(
+                new DocumentModels.CreateCategoryRequest("백엔드/Spring"));
+
+        assertThat(created.path()).isEqualTo("백엔드/Spring");
+        assertThat(created.documentCount()).isZero();
+        assertThat(documentRoot.resolve("백엔드/Spring")).isDirectory();
+        assertThat(documentRoot.resolve("백엔드/Spring/.gitkeep")).exists();
+        assertThat(documentService.findCategories())
+                .extracting(DocumentModels.CategoryResponse::path)
+                .contains("백엔드");
+    }
+
+    @Test
+    void 폴더를_수정하면_하위_문서와_폴더를_함께_이동한다() throws IOException {
+        Files.createDirectories(documentRoot.resolve("백엔드/Spring/JPA"));
+        Files.writeString(documentRoot.resolve("백엔드/Spring/JPA/지연 로딩.md"),
+                "# 지연 로딩", StandardCharsets.UTF_8);
+        documentService.refreshIndex();
+
+        var updated = documentService.updateCategory(
+                new DocumentModels.UpdateCategoryRequest("백엔드/Spring", "프레임워크/Spring"));
+
+        assertThat(updated.path()).isEqualTo("프레임워크/Spring");
+        assertThat(updated.documentCount()).isEqualTo(1);
+        assertThat(documentRoot.resolve("백엔드/Spring")).doesNotExist();
+        assertThat(documentRoot.resolve("프레임워크/Spring/JPA/지연 로딩.md")).exists();
+        assertThat(documentService.findDocuments("프레임워크/Spring", null))
+                .extracting(DocumentModels.DocumentSummaryResponse::title)
+                .containsExactly("지연 로딩");
+    }
+
+    @Test
+    void 폴더를_자기_하위로_이동하거나_기존_폴더와_겹치게_수정하지_못한다() throws IOException {
+        Files.createDirectories(documentRoot.resolve("백엔드/Spring"));
+        documentService.refreshIndex();
+
+        assertThatThrownBy(() -> documentService.updateCategory(
+                new DocumentModels.UpdateCategoryRequest("백엔드", "백엔드/Spring/하위")))
+                .isInstanceOf(InvalidDocumentPathException.class);
+        assertThatThrownBy(() -> documentService.updateCategory(
+                new DocumentModels.UpdateCategoryRequest("백엔드", "데이터베이스")))
+                .isInstanceOf(DocumentConflictException.class);
+    }
+
+    @Test
     void 카테고리와_검색어로_문서를_필터링한다() {
         var documents = documentService.findDocuments("데이터베이스", "격리");
 
@@ -184,6 +230,19 @@ class DocumentServiceTest {
         assertThat(updated.content()).startsWith("# ACID\n");
         assertThat(documentRoot.resolve("데이터베이스/트랜잭션.md")).doesNotExist();
         assertThat(documentRoot.resolve("백엔드/ACID.md")).exists();
+    }
+
+    @Test
+    void 본문을_다시_저장하지_않고_문서를_다른_폴더로_이동한다() {
+        var before = documentService.findDocuments("데이터베이스", null).getFirst();
+        var moved = documentService.moveDocument(before.id(), new DocumentModels.MoveDocumentRequest(
+                "백엔드/데이터", before.updatedAt()));
+
+        assertThat(moved.id()).isNotEqualTo(before.id());
+        assertThat(moved.path()).isEqualTo("백엔드/데이터/트랜잭션.md");
+        assertThat(moved.content()).contains("본문");
+        assertThat(documentRoot.resolve("데이터베이스/트랜잭션.md")).doesNotExist();
+        assertThat(documentRoot.resolve("백엔드/데이터/트랜잭션.md")).exists();
     }
 
     @Test

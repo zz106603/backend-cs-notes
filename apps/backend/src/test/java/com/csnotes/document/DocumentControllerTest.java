@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,6 +30,25 @@ class DocumentControllerTest {
 
     @MockitoBean
     DocumentService documentService;
+
+    @Test
+    void 폴더를_생성하고_경로를_수정한다() throws Exception {
+        when(documentService.createCategory(any())).thenReturn(
+                new DocumentModels.CategoryResponse("Spring", "백엔드/Spring", 0, List.of()));
+        when(documentService.updateCategory(any())).thenReturn(
+                new DocumentModels.CategoryResponse("스프링", "백엔드/스프링", 0, List.of()));
+
+        mockMvc.perform(post("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"path\":\"백엔드/Spring\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.path").value("백엔드/Spring"));
+        mockMvc.perform(put("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"path\":\"백엔드/Spring\",\"newPath\":\"백엔드/스프링\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.path").value("백엔드/스프링"));
+    }
 
     @Test
     void 문서를_생성하고_생성됨_상태를_반환한다() throws Exception {
@@ -46,6 +66,24 @@ class DocumentControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value("document-id"))
                 .andExpect(jsonPath("$.path").value("데이터베이스/인덱스.md"));
+    }
+
+    @Test
+    void 문서를_다른_폴더로_이동한다() throws Exception {
+        var response = new DocumentModels.DocumentDetailResponse(
+                "moved-id", "인덱스", "백엔드", "백엔드/인덱스.md",
+                "# 인덱스\n", Instant.parse("2026-08-19T00:00:00Z")
+        );
+        when(documentService.moveDocument(any(), any())).thenReturn(response);
+
+        mockMvc.perform(post("/api/documents/document-id/move")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"category":"백엔드","expectedUpdatedAt":"2026-08-19T00:00:00Z"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("moved-id"))
+                .andExpect(jsonPath("$.path").value("백엔드/인덱스.md"));
     }
 
     @Test

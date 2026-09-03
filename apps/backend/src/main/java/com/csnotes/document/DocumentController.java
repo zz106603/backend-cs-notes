@@ -33,6 +33,20 @@ public class DocumentController {
         return documentService.findCategories();
     }
 
+    @PostMapping("/categories")
+    public ResponseEntity<DocumentModels.CategoryResponse> createCategory(
+            @Valid @RequestBody DocumentModels.CreateCategoryRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(documentService.createCategory(request));
+    }
+
+    @PutMapping("/categories")
+    public DocumentModels.CategoryResponse updateCategory(
+            @Valid @RequestBody DocumentModels.UpdateCategoryRequest request
+    ) {
+        return documentService.updateCategory(request);
+    }
+
     @GetMapping("/documents")
     public List<DocumentModels.DocumentSummaryResponse> documents(
             @RequestParam(required = false) String category,
@@ -63,6 +77,14 @@ public class DocumentController {
             @Valid @RequestBody DocumentModels.UpdateDocumentRequest request
     ) {
         return documentService.updateDocument(id, request);
+    }
+
+    @PostMapping("/documents/{id}/move")
+    public DocumentModels.DocumentDetailResponse moveDocument(
+            @PathVariable @NotBlank String id,
+            @Valid @RequestBody DocumentModels.MoveDocumentRequest request
+    ) {
+        return documentService.moveDocument(id, request);
     }
 
     @DeleteMapping("/documents/{id}")

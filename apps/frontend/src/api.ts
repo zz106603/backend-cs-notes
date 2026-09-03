@@ -26,6 +26,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   categories: () => request<Category[]>('/api/categories'),
+  createCategory: (path: string) => request<Category>('/api/categories', {
+    method: 'POST',
+    body: JSON.stringify({ path }),
+  }),
+  updateCategory: (path: string, newPath: string) => request<Category>('/api/categories', {
+    method: 'PUT',
+    body: JSON.stringify({ path, newPath }),
+  }),
   documents: (category?: string, query?: string) => {
     const params = new URLSearchParams()
     if (category) params.set('category', category)
@@ -41,6 +49,10 @@ export const api = {
   updateDocument: (id: string, input: UpdateDocumentInput) => request<DocumentDetail>(
     `/api/documents/${encodeURIComponent(id)}`,
     { method: 'PUT', body: JSON.stringify(input) },
+  ),
+  moveDocument: (id: string, category: string, expectedUpdatedAt: string) => request<DocumentDetail>(
+    `/api/documents/${encodeURIComponent(id)}/move`,
+    { method: 'POST', body: JSON.stringify({ category, expectedUpdatedAt }) },
   ),
   moveDocumentToTrash: (id: string) => request<void>(`/api/documents/${encodeURIComponent(id)}`, {
     method: 'DELETE',
