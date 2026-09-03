@@ -9,6 +9,8 @@ public record RagSearchResponse(
         int limit,
         double minimumScore,
         boolean cachedQueryEmbedding,
-        List<RagSearchHit> results
+        List<RagSearchHit> results,
+        boolean rerankingApplied,
+        Double rerankingMinimumScore
 ) {
 }

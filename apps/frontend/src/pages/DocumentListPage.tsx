@@ -240,7 +240,9 @@ export function DocumentListPage() {
           <div className="empty-state">
             <Search size={28} />
             <h3>관련 문서를 찾지 못했습니다</h3>
-            <p>다른 표현으로 질문하거나 문서 색인 상태를 확인해 보세요.</p>
+            <p>{ragSearch.data.rerankingApplied && ragSearch.data.rerankingMinimumScore !== null
+              ? `Cohere 관련도 ${(ragSearch.data.rerankingMinimumScore * 100).toFixed(0)}% 이상인 Chunk가 없습니다.`
+              : '다른 표현으로 질문하거나 문서 색인 상태를 확인해 보세요.'}</p>
           </div>
         )}
         {searchMode !== 'general' && semanticDocuments.length > 0 && (

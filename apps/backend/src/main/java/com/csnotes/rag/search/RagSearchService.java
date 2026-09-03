@@ -5,6 +5,7 @@ import com.csnotes.rag.embedding.EmbeddingVector;
 import com.csnotes.rag.persistence.ChunkSearchResult;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import com.csnotes.rag.reranking.RagRerankingService;
+import com.csnotes.rag.reranking.RagRerankingResult;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -81,7 +82,7 @@ public final class RagSearchService {
         if (mode == RagSearchMode.SPARSE) {
             List<RagSearchHit> results = toHits(
                     vectorStore.searchSparse(query, limit, minimumScore), RagSearchMode.SPARSE);
-            return new RagSearchResponse(query, null, mode, limit, minimumScore, false, results);
+            return new RagSearchResponse(query, null, mode, limit, minimumScore, false, results, false, null);
         }
 
         if (embeddingProvider == null) {
@@ -99,15 +100,15 @@ public final class RagSearchService {
             // RRF는 후보를 넓게 정리하고, Reranker가 있으면 질문과 본문을 직접 비교한 뒤 최종 limit만 남긴다.
             List<RagSearchHit> fusedCandidates = reciprocalRankFusion(
                     denseResults, sparseResults, candidateLimit);
-            List<RagSearchHit> results = rerankingService.rerank(query, fusedCandidates, limit);
+            RagRerankingResult reranking = rerankingService.rerank(query, fusedCandidates, limit);
             return new RagSearchResponse(query, embeddingProvider.modelName(), mode, limit, minimumScore,
-                    lookup.cached(), results);
+                    lookup.cached(), reranking.hits(), reranking.applied(), reranking.minimumScore());
         }
 
         List<RagSearchHit> results = toHits(
                 vectorStore.search(lookup.embedding(), limit, minimumScore), RagSearchMode.DENSE);
         return new RagSearchResponse(query, embeddingProvider.modelName(), mode, limit, minimumScore,
-                lookup.cached(), results);
+                lookup.cached(), results, false, null);
     }
 
     private List<RagSearchHit> toHits(List<ChunkSearchResult> results, RagSearchMode mode) {

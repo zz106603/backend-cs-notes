@@ -15,11 +15,13 @@ class RagRerankingServiceTest {
     void 비활성화하면_RRF_순서를_유지하고_요청한_개수만_반환한다() {
         RagRerankingService service = RagRerankingService.disabled();
 
-        List<RagSearchHit> results = service.rerank(
+        RagRerankingResult result = service.rerank(
                 "질문", List.of(hit("a"), hit("b"), hit("c")), 2);
 
-        assertThat(results).extracting(RagSearchHit::chunkId).containsExactly("a", "b");
-        assertThat(results).allSatisfy(hit -> {
+        assertThat(result.applied()).isFalse();
+        assertThat(result.minimumScore()).isNull();
+        assertThat(result.hits()).extracting(RagSearchHit::chunkId).containsExactly("a", "b");
+        assertThat(result.hits()).allSatisfy(hit -> {
             assertThat(hit.rerankScore()).isNull();
             assertThat(hit.rerankRank()).isNull();
         });
@@ -34,15 +36,17 @@ class RagRerankingServiceTest {
         ));
         RagRerankingService service = new RagRerankingService(true, reranker, 0.5);
 
-        List<RagSearchHit> results = service.rerank(
+        RagRerankingResult result = service.rerank(
                 "트랜잭션 질문", List.of(hit("a"), hit("b"), hit("c")), 3);
 
         assertThat(reranker.query).isEqualTo("트랜잭션 질문");
         assertThat(reranker.candidates).extracting(ChunkRerankCandidate::chunkId)
                 .containsExactly("a", "b", "c");
-        assertThat(results).extracting(RagSearchHit::chunkId).containsExactly("b", "a");
-        assertThat(results).extracting(RagSearchHit::rerankScore).containsExactly(0.91, 0.72);
-        assertThat(results).extracting(RagSearchHit::rerankRank).containsExactly(1, 2);
+        assertThat(result.applied()).isTrue();
+        assertThat(result.minimumScore()).isEqualTo(0.5);
+        assertThat(result.hits()).extracting(RagSearchHit::chunkId).containsExactly("b", "a");
+        assertThat(result.hits()).extracting(RagSearchHit::rerankScore).containsExactly(0.91, 0.72);
+        assertThat(result.hits()).extracting(RagSearchHit::rerankRank).containsExactly(1, 2);
     }
 
     @Test
@@ -59,9 +63,10 @@ class RagRerankingServiceTest {
     void 활성화해도_구현체가_없으면_RRF_결과로_fallback한다() {
         RagRerankingService service = new RagRerankingService(true, null, 0.0);
 
-        List<RagSearchHit> results = service.rerank("질문", List.of(hit("a"), hit("b")), 1);
+        RagRerankingResult result = service.rerank("질문", List.of(hit("a"), hit("b")), 1);
 
-        assertThat(results).extracting(RagSearchHit::chunkId).containsExactly("a");
+        assertThat(result.applied()).isFalse();
+        assertThat(result.hits()).extracting(RagSearchHit::chunkId).containsExactly("a");
     }
 
     @Test
@@ -74,10 +79,11 @@ class RagRerankingServiceTest {
         };
         RagRerankingService service = new RagRerankingService(true, unavailable, 0.0);
 
-        List<RagSearchHit> results = service.rerank("질문", List.of(hit("a"), hit("b")), 2);
+        RagRerankingResult result = service.rerank("질문", List.of(hit("a"), hit("b")), 2);
 
-        assertThat(results).extracting(RagSearchHit::chunkId).containsExactly("a", "b");
-        assertThat(results).allSatisfy(hit -> assertThat(hit.rerankScore()).isNull());
+        assertThat(result.applied()).isFalse();
+        assertThat(result.hits()).extracting(RagSearchHit::chunkId).containsExactly("a", "b");
+        assertThat(result.hits()).allSatisfy(hit -> assertThat(hit.rerankScore()).isNull());
     }
 
     private RagSearchHit hit(String chunkId) {

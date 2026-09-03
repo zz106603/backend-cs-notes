@@ -148,7 +148,11 @@ export function GlobalSearchModal({ onClose }: { onClose: () => void }) {
 
           {mode !== 'general' && ragSearch.isPending && <div className="global-search-status"><span className="loader" /> {mode === 'hybrid' ? '의미와 키워드가 관련된' : mode === 'dense' ? '의미가 가까운' : '키워드가 일치하는'} 문서를 찾는 중</div>}
           {mode !== 'general' && ragSearch.error && <div className="global-search-error">{(ragSearch.error as Error).message}</div>}
-          {mode !== 'general' && ragSearch.data && semanticDocuments.length === 0 && <div className="global-search-empty"><p>관련 문서를 찾지 못했습니다.</p></div>}
+          {mode !== 'general' && ragSearch.data && semanticDocuments.length === 0 && <div className="global-search-empty"><p>
+            {ragSearch.data.rerankingApplied && ragSearch.data.rerankingMinimumScore !== null
+              ? `관련도 ${(ragSearch.data.rerankingMinimumScore * 100).toFixed(0)}% 이상인 문서를 찾지 못했습니다.`
+              : '관련 문서를 찾지 못했습니다.'}
+          </p></div>}
           {mode !== 'general' && semanticDocuments.map((document) => (
             <Link className="global-search-result" to={`/notes/${document.documentId}`} onClick={onClose} key={document.documentId}>
               <span className="global-search-result__icon global-search-result__icon--semantic"><BrainCircuit size={17} /></span>

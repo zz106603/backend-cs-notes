@@ -81,7 +81,7 @@ Cohere Trial Key는 무료 평가와 프로토타입 용도에 적합하지만 �
 
 ```env
 RAG_RERANKING_ENABLED=false
-RAG_RERANKING_MINIMUM_SCORE=0.0
+RAG_RERANKING_MINIMUM_SCORE=0.65
 COHERE_API_KEY=
 COHERE_RERANK_MODEL=rerank-v4.0-fast
 RAG_SEARCH_HYBRID_CANDIDATE_LIMIT=20
@@ -146,7 +146,9 @@ Cohere는 구조화된 문서를 YAML 문자열로 표현하는 방식을 권장
 
 ## 관련성 임계값 정책
 
-초기 `RAG_RERANKING_MINIMUM_SCORE`는 `0.0`으로 둔다. Cohere 점수는 cosine 유사도나 RRF 점수와 다른 척도이며, 일반적인 숫자 하나를 그대로 적용한다고 품질이 보장되지 않는다.
+초기 평가에서는 `RAG_RERANKING_MINIMUM_SCORE`를 `0.0`으로 두고 점수 분포를 수집했다. 긍정 질문의 정답 Chunk 최솟값 `0.770`과 부정 질문의 최고 점수 `0.558` 사이를 기준으로 운영 기본값을 `0.65`로 정했다.
+
+이 값은 현재 문서와 평가 질문에 대한 1차 기준이다. 문서, 후보 구성, Cohere 모델이 바뀌면 긍정 정답 점수와 부정 최고 점수를 다시 측정해 조정한다.
 
 먼저 검색 품질 평가 화면에서 다음 값을 수집한다.
 
@@ -228,5 +230,8 @@ PythonCrossEncoderChunkReranker
 - 외부 호출 없는 HTTP·캐시·조건부 설정·fallback 단위 테스트
 - `COHERE_API_KEY`가 있을 때만 명시적으로 실행되는 `cohereRerankerLiveTest`
 - 평가 및 검색 화면의 Reranker 점수·순위 우선 표시
+- 긍정·부정 평가 점수 분포에서 정한 기본 관련성 임계값 `0.65`
+- 임계값을 통과한 Chunk가 없을 때 빈 검색 결과 및 RAG 답변 생성 차단
+- 평가 화면의 임계값 적용 여부와 부정 질문 차단 결과 표시
 
-실제 Trial API 연결 테스트와 관련성 점수 분포 확인은 사용자가 환경변수로 Key와 활성화 값을 주입한 뒤 수행한다. 평가 전 최소 관련성 점수는 계속 `0.0`으로 유지한다.
+실제 Trial API 평가에서 긍정 정답 최솟값 `0.770`, 부정 질문 최댓값 `0.558`을 확인했다. 현재 기본 임계값 `0.65`는 이 평가 집합에 대한 1차 기준이며, 문서와 질문이 늘어나면 같은 방식으로 재평가한다.
