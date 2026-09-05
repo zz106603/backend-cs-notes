@@ -1,4 +1,4 @@
-### 시간 복잡도와 공간 복잡도 (Time & Space Complexity)
+### 시간 복잡도 vs 공간 복잡도 (Time & Space Complexity)
 
 **정의**
 
