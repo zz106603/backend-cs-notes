@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BookOpenText, Braces, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, X } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Braces, LogIn, Menu, Moon, PanelLeftClose, PanelLeftOpen, Search, Sun, X } from 'lucide-react'
 import { Link, Navigate, Route, Routes } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { GlobalSearchModal } from './components/GlobalSearchModal'
 import { usePersistentState } from './hooks/usePersistentState'
+import { api } from './api'
 
 const DocumentListPage = lazy(() => import('./pages/DocumentListPage').then((module) => ({ default: module.DocumentListPage })))
 const DocumentPage = lazy(() => import('./pages/DocumentPage').then((module) => ({ default: module.DocumentPage })))
@@ -14,6 +16,14 @@ const RagIndexingPage = lazy(() => import('./pages/RagIndexingPage').then((modul
 const RagEvaluationPage = lazy(() => import('./pages/RagEvaluationPage').then((module) => ({ default: module.RagEvaluationPage })))
 
 export default function App() {
+  const queryClient = useQueryClient()
+  const auth = useQuery({ queryKey: ['auth'], queryFn: api.authStatus, retry: false })
+  const logout = useMutation({
+    mutationFn: api.logout,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['auth'] })
+    },
+  })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = usePersistentState('cs-notes-sidebar-collapsed', false)
@@ -38,6 +48,27 @@ export default function App() {
     window.addEventListener('keydown', openSearch)
     return () => window.removeEventListener('keydown', openSearch)
   }, [])
+
+  if (auth.isLoading) {
+    return <div className="auth-page"><span className="loader" /><p>로그인 상태를 확인하는 중</p></div>
+  }
+
+  if (auth.isError) {
+    return <div className="auth-page"><h1>서버에 연결할 수 없습니다.</h1><p>{(auth.error as Error).message}</p></div>
+  }
+
+  if (auth.data?.securityEnabled && !auth.data.authenticated) {
+    return <div className="auth-page">
+      <div className="auth-card">
+        <span className="brand-mark"><Braces size={24} /></span>
+        <p className="eyebrow">BACKEND CS NOTES</p>
+        <h1>Kernel에 로그인</h1>
+        <p>내 문서와 검색 기록을 안전하게 사용하려면 Google 계정으로 로그인하세요.</p>
+        {new URLSearchParams(window.location.search).get('loginError') && <div className="editor-error">로그인에 실패했습니다. 다시 시도해 주세요.</div>}
+        <a className="auth-login-button" href="/oauth2/authorization/google"><LogIn size={17} /> Google로 계속하기</a>
+      </div>
+    </div>
+  }
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'app-shell--sidebar-collapsed' : ''}`}>
@@ -86,11 +117,14 @@ export default function App() {
         />
 
         <div className="sidebar-footer">
-          <div className="sidebar-footer__icon"><BookOpenText size={17} /></div>
+          {auth.data?.user?.pictureUrl
+            ? <img className="sidebar-user-avatar" src={auth.data.user.pictureUrl} alt="" referrerPolicy="no-referrer" />
+            : <div className="sidebar-user-avatar sidebar-user-avatar--fallback">{auth.data?.user?.displayName?.slice(0, 1) ?? 'K'}</div>}
           <div>
-            <span>Knowledge base</span>
-            <small>Markdown powered</small>
+            <span>{auth.data?.user?.displayName ?? 'Local mode'}</span>
+            <small>{auth.data?.user?.email ?? 'Authentication disabled'}</small>
           </div>
+          {auth.data?.securityEnabled && <button className="sidebar-logout" type="button" onClick={() => logout.mutate()} disabled={logout.isPending}>로그아웃</button>}
           <button
             className="theme-toggle"
             type="button"
