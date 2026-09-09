@@ -1,9 +1,17 @@
-import type { Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagEvaluationCase, RagEvaluationRunResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
+import type { AuthStatus, Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagEvaluationCase, RagEvaluationRunResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
+
+let csrfHeaderName: string | null = null
+let csrfToken: string | null = null
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
-    headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers,
+    credentials: 'same-origin',
+    headers: {
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(csrfHeaderName && csrfToken && init?.method && init.method !== 'GET' ? { [csrfHeaderName]: csrfToken } : {}),
+      ...init?.headers,
+    },
   })
 
   if (!response.ok) {
@@ -25,6 +33,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  authStatus: async () => {
+    const status = await request<AuthStatus>('/api/auth/me')
+    csrfHeaderName = status.csrfHeaderName
+    csrfToken = status.csrfToken
+    return status
+  },
+  logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
   categories: () => request<Category[]>('/api/categories'),
   createCategory: (path: string) => request<Category>('/api/categories', {
     method: 'POST',

@@ -145,3 +145,18 @@ export interface RagEvaluationRunResponse {
   limit: number
   modes: RagEvaluationModeResult[]
 }
+export type AuthenticatedUser = {
+  id: string
+  email: string
+  displayName: string
+  pictureUrl: string | null
+  role: string
+}
+
+export type AuthStatus = {
+  securityEnabled: boolean
+  authenticated: boolean
+  user: AuthenticatedUser | null
+  csrfHeaderName: string | null
+  csrfToken: string | null
+}
