@@ -21,6 +21,8 @@ dependencies {
     implementation(platform("org.springframework.ai:spring-ai-bom:1.1.8"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-client")
     implementation("org.springframework:spring-jdbc")
     implementation("com.zaxxer:HikariCP")
     implementation("org.flywaydb:flyway-core")
@@ -30,6 +32,7 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.security:spring-security-test")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
