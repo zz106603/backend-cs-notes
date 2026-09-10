@@ -1,9 +1,9 @@
 import { useMutation } from '@tanstack/react-query'
-import { CheckCircle2, CircleDollarSign, DatabaseZap, FileCheck2, FileMinus2, FilePenLine, FilePlus2, RefreshCw, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, DatabaseZap, FileCheck2, FileMinus2, FilePenLine, FilePlus2, RefreshCw, ShieldCheck, UserRoundCheck } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../api'
 import { ErrorState } from '../components/ErrorState'
-import type { RagIndexingAction, RagIndexingDocumentResult, RagIndexingResult } from '../types'
+import type { DocumentMetadataSyncResult, RagIndexingAction, RagIndexingDocumentResult, RagIndexingResult } from '../types'
 
 const ACTION_META: Record<RagIndexingAction, { label: string; icon: typeof FilePlus2 }> = {
   NEW: { label: '신규', icon: FilePlus2 },
@@ -14,6 +14,11 @@ const ACTION_META: Record<RagIndexingAction, { label: string; icon: typeof FileP
 
 export function RagIndexingPage() {
   const [result, setResult] = useState<RagIndexingResult | null>(null)
+  const [metadataResult, setMetadataResult] = useState<DocumentMetadataSyncResult | null>(null)
+  const synchronizeMetadata = useMutation({
+    mutationFn: api.synchronizeDocumentMetadata,
+    onSuccess: setMetadataResult,
+  })
   const preview = useMutation({
     mutationFn: api.previewRagIndex,
     onSuccess: setResult,
@@ -41,6 +46,29 @@ export function RagIndexingPage() {
 
   return (
     <div className="page page--indexing">
+      <section className="metadata-sync-panel">
+        <div className="metadata-sync-panel__content">
+          <div className="metadata-sync-panel__icon"><UserRoundCheck size={20} /></div>
+          <div>
+            <span>DOCUMENT OWNERSHIP</span>
+            <h2>문서 메타데이터 동기화</h2>
+            <p>Markdown 문서의 경로와 본문 변경 상태를 확인해 현재 로그인 계정의 문서 메타데이터와 맞춥니다.</p>
+          </div>
+        </div>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => synchronizeMetadata.mutate()}
+          disabled={synchronizeMetadata.isPending}
+        >
+          <RefreshCw size={15} className={synchronizeMetadata.isPending ? 'spin-icon' : ''} />
+          {synchronizeMetadata.isPending ? '동기화 중' : metadataResult ? '다시 동기화' : '내 문서로 동기화'}
+        </button>
+      </section>
+
+      {synchronizeMetadata.error && <ErrorState message={(synchronizeMetadata.error as Error).message} />}
+      {metadataResult && <MetadataSyncResultView result={metadataResult} />}
+
       <section className="indexing-hero">
         <div className="eyebrow"><DatabaseZap size={14} /> VECTOR INDEX MANAGER</div>
         <h1>문서 색인 관리</h1>
@@ -92,6 +120,19 @@ export function RagIndexingPage() {
       )}
     </div>
   )
+}
+
+function MetadataSyncResultView({ result }: { result: DocumentMetadataSyncResult }) {
+  return <section className={`metadata-sync-result ${result.ownershipConflicts > 0 ? 'metadata-sync-result--warning' : ''}`}>
+    <CheckCircle2 size={18} />
+    <div>
+      <strong>문서 메타데이터 동기화가 완료되었습니다.</strong>
+      <span>
+        전체 {result.scanned} · 신규 {result.created} · 변경 {result.updated} · 최신 {result.unchanged} · 삭제 {result.deleted}
+        {result.ownershipConflicts > 0 && ` · 소유권 충돌 ${result.ownershipConflicts}`}
+      </span>
+    </div>
+  </section>
 }
 
 function IndexingResultView({ result, changes }: { result: RagIndexingResult; changes: RagIndexingDocumentResult[] }) {

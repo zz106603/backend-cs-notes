@@ -1,4 +1,4 @@
-import type { AuthStatus, Category, CreateDocumentInput, DocumentDetail, DocumentSummary, RagAnswerResponse, RagEvaluationCase, RagEvaluationRunResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
+import type { AuthStatus, Category, CreateDocumentInput, DocumentDetail, DocumentMetadataSyncResult, DocumentSummary, RagAnswerResponse, RagEvaluationCase, RagEvaluationRunResponse, RagIndexingResult, RagSearchResponse, TrashDocument, UpdateDocumentInput } from './types'
 
 let csrfHeaderName: string | null = null
 let csrfToken: string | null = null
@@ -24,7 +24,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ? 'RAG 답변 기능이 비활성화되어 있습니다. 백엔드의 답변 생성 설정을 확인해 주세요.'
       : path.startsWith('/api/rag/')
         ? 'RAG 검색 기능이 비활성화되어 있습니다. 백엔드의 검색 설정을 확인해 주세요.'
-        : '문서를 찾을 수 없습니다.'
+        : path === '/api/documents/metadata/sync'
+          ? '문서 메타데이터 동기화 기능을 사용하려면 인증과 PostgreSQL 저장 설정을 모두 활성화해야 합니다.'
+          : '문서를 찾을 수 없습니다.'
     throw new Error(problem?.detail ?? (response.status === 404 ? notFoundMessage : '요청을 처리하지 못했습니다.'))
   }
 
@@ -40,6 +42,9 @@ export const api = {
     return status
   },
   logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+  synchronizeDocumentMetadata: () => request<DocumentMetadataSyncResult>('/api/documents/metadata/sync', {
+    method: 'POST',
+  }),
   categories: () => request<Category[]>('/api/categories'),
   createCategory: (path: string) => request<Category>('/api/categories', {
     method: 'POST',
