@@ -123,6 +123,15 @@ export interface RagIndexingResult {
   documents: RagIndexingDocumentResult[]
 }
 
+export interface DocumentMetadataSyncResult {
+  scanned: number
+  created: number
+  updated: number
+  unchanged: number
+  deleted: number
+  ownershipConflicts: number
+}
+
 export interface RagEvaluationCase {
   id: string
   query: string
