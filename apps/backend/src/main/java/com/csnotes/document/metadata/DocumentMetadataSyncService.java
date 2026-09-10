@@ -6,13 +6,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,7 +41,7 @@ public class DocumentMetadataSyncService {
                     .orElseThrow(() -> new IllegalStateException("동기화 중 문서가 사라졌습니다: " + summary.path()));
             currentPaths.add(summary.path());
             DocumentMetadataRepository.MetadataSource source = new DocumentMetadataRepository.MetadataSource(
-                    summary.id(), summary.path(), summary.title(), sha256(detail.content()));
+                    summary.id(), summary.path(), summary.title(), DocumentContentHasher.sha256(detail.content()));
             DocumentMetadata stored = storedByPath.get(summary.path());
             if (stored == null) {
                 if (repository.insert(ownerId, source)) created++;
@@ -79,13 +75,4 @@ public class DocumentMetadataSyncService {
                 || !stored.contentHash().equals(source.contentHash());
     }
 
-    private String sha256(String content) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(content.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", exception);
-        }
-    }
 }

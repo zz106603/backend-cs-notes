@@ -1,5 +1,6 @@
 package com.csnotes.document;
 
+import com.csnotes.document.metadata.DocumentOwnershipConflictException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,8 +15,8 @@ public class DocumentExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
-    @ExceptionHandler(DocumentConflictException.class)
-    ProblemDetail handleConflict(DocumentConflictException exception) {
+    @ExceptionHandler({DocumentConflictException.class, DocumentOwnershipConflictException.class})
+    ProblemDetail handleConflict(RuntimeException exception) {
         return problem(HttpStatus.CONFLICT, exception.getMessage());
     }
 
