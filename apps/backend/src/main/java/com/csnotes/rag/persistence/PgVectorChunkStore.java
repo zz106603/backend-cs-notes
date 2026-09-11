@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.ArrayList;
@@ -44,16 +45,23 @@ public class PgVectorChunkStore implements ChunkVectorStore {
     @Override
     @Transactional("ragTransactionManager")
     public void replaceDocumentChunks(String documentId, List<EmbeddedChunk> chunks) {
+        replaceDocumentChunks(null, documentId, chunks);
+    }
+
+    @Override
+    @Transactional("ragTransactionManager")
+    public void replaceDocumentChunks(UUID documentMetadataId, String documentId, List<EmbeddedChunk> chunks) {
         deleteDocument(documentId);
         for (EmbeddedChunk embeddedChunk : chunks) {
             validateDimensions(embeddedChunk.embedding());
             DocumentChunk chunk = embeddedChunk.chunk();
             jdbcTemplate.update("""
                     INSERT INTO document_chunk (
-                        id, document_id, document_title, document_path, tags, section_path,
+                        id, document_id, document_metadata_id, document_title, document_path, tags, section_path,
                         sequence, content, content_hash, embedding_model, embedding
-                    ) VALUES (?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, ?, ?, CAST(? AS vector))
-                    """, chunk.id(), chunk.documentId(), chunk.documentTitle(), chunk.documentPath(),
+                    ) VALUES (?, ?, ?, ?, ?, CAST(? AS jsonb), CAST(? AS jsonb), ?, ?, ?, ?, CAST(? AS vector))
+                    """, chunk.id(), chunk.documentId(), documentMetadataId,
+                    chunk.documentTitle(), chunk.documentPath(),
                     toJson(chunk.tags()), toJson(chunk.sectionPath()), chunk.sequence(), chunk.content(),
                     chunk.contentHash(), embeddedChunk.embedding().model(), toVector(embeddedChunk.embedding().values()));
         }

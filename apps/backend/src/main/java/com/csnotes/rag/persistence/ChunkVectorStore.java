@@ -5,10 +5,16 @@ import com.csnotes.rag.embedding.EmbeddingVector;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /** Chunk 저장 기술을 RAG 동기화와 검색 로직에서 분리하는 포트다. */
 public interface ChunkVectorStore {
     void replaceDocumentChunks(String documentId, List<EmbeddedChunk> chunks);
+
+    /** 인증 모드에서는 파일 기반 ID와 별도로 권한 조인에 사용할 내부 문서 UUID를 저장한다. */
+    default void replaceDocumentChunks(UUID documentMetadataId, String documentId, List<EmbeddedChunk> chunks) {
+        replaceDocumentChunks(documentId, chunks);
+    }
 
     void deleteDocument(String documentId);
 

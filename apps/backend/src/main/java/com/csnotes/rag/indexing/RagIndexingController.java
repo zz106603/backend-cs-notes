@@ -1,8 +1,10 @@
 package com.csnotes.rag.indexing;
 
+import com.csnotes.auth.CsNotesOidcUser;
 import com.csnotes.rag.embedding.OpenAiApiKeyCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,7 +23,13 @@ public class RagIndexingController {
 
     /** 명시적으로 dryRun=false를 보낸 경우에만 OpenAI 호출과 DB 변경을 수행한다. */
     @PostMapping("/index")
-    public RagIndexingResult index(@RequestParam(defaultValue = "true") boolean dryRun) {
+    public RagIndexingResult index(
+            @RequestParam(defaultValue = "true") boolean dryRun,
+            Authentication authentication
+    ) {
+        if (authentication != null && authentication.getPrincipal() instanceof CsNotesOidcUser principal) {
+            return indexingService.synchronize(principal.userId(), dryRun);
+        }
         return indexingService.synchronize(dryRun);
     }
 }

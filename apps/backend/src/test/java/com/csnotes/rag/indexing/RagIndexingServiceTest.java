@@ -2,6 +2,9 @@ package com.csnotes.rag.indexing;
 
 import com.csnotes.document.DocumentModels;
 import com.csnotes.document.DocumentService;
+import com.csnotes.document.metadata.DocumentMetadata;
+import com.csnotes.document.metadata.DocumentMetadataRepository;
+import com.csnotes.document.metadata.DocumentVisibility;
 import com.csnotes.rag.chunk.HeadingAwareMarkdownChunker;
 import com.csnotes.rag.embedding.EmbeddingInput;
 import com.csnotes.rag.embedding.EmbeddingProvider;
@@ -20,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -138,6 +142,44 @@ class RagIndexingServiceTest {
         assertThat(store.deleted).isEmpty();
     }
 
+    @Test
+    void 인증된_색인은_내부_문서_UUID를_청크에_연결한다() {
+        UUID ownerId = UUID.randomUUID();
+        UUID metadataId = UUID.randomUUID();
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        DocumentService documents = documentService("권한이 연결된 본문입니다.");
+        DocumentMetadataRepository metadataRepository = mock(DocumentMetadataRepository.class);
+        when(metadataRepository.findActiveByOwnerIdIndexedBySourceId(ownerId)).thenReturn(Map.of(
+                "doc-1", new DocumentMetadata(metadataId, ownerId, "doc-1", "백엔드/테스트.md", "테스트",
+                        DocumentVisibility.PRIVATE, "hash", Instant.EPOCH, Instant.EPOCH, null)
+        ));
+        RagIndexingService service = new RagIndexingService(
+                documents, new HeadingAwareMarkdownChunker(2000), provider, store, metadataRepository,
+                10, 10, 10_000);
+
+        service.synchronize(ownerId, false);
+
+        assertThat(store.documentMetadataIds).containsExactly(metadataId);
+    }
+
+    @Test
+    void 인증된_문서의_메타데이터가_없으면_OpenAI_호출_전에_중단한다() {
+        UUID ownerId = UUID.randomUUID();
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        DocumentMetadataRepository metadataRepository = mock(DocumentMetadataRepository.class);
+        when(metadataRepository.findActiveByOwnerIdIndexedBySourceId(ownerId)).thenReturn(Map.of());
+        RagIndexingService service = new RagIndexingService(
+                documentService("메타데이터 없는 본문"), new HeadingAwareMarkdownChunker(2000),
+                provider, store, metadataRepository, 10, 10, 10_000);
+
+        assertThatThrownBy(() -> service.synchronize(ownerId, false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("먼저 내 문서로 동기화");
+        assertThat(provider.inputs).isEmpty();
+    }
+
     private RagIndexingService service(
             DocumentService documentService,
             RecordingEmbeddingProvider provider,
@@ -191,8 +233,13 @@ class RagIndexingServiceTest {
         private final Map<String, IndexedDocumentState> indexedStates = new HashMap<>();
         private final List<List<EmbeddedChunk>> replaced = new ArrayList<>();
         private final List<String> deleted = new ArrayList<>();
+        private final List<UUID> documentMetadataIds = new ArrayList<>();
 
         @Override public void replaceDocumentChunks(String documentId, List<EmbeddedChunk> chunks) { replaced.add(chunks); }
+        @Override public void replaceDocumentChunks(UUID metadataId, String documentId, List<EmbeddedChunk> chunks) {
+            documentMetadataIds.add(metadataId);
+            replaced.add(chunks);
+        }
         @Override public void deleteDocument(String documentId) { deleted.add(documentId); }
         @Override public Map<String, float[]> findReusableEmbeddings(String modelName, Set<String> hashes) {
             return Map.copyOf(reusable);

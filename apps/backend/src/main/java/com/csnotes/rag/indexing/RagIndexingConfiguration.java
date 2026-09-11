@@ -1,12 +1,14 @@
 package com.csnotes.rag.indexing;
 
 import com.csnotes.document.DocumentService;
+import com.csnotes.document.metadata.DocumentMetadataRepository;
 import com.csnotes.rag.chunk.HeadingAwareMarkdownChunker;
 import com.csnotes.rag.chunk.MarkdownChunker;
 import com.csnotes.rag.embedding.EmbeddingProvider;
 import com.csnotes.rag.embedding.OpenAiApiKeyCondition;
 import com.csnotes.rag.persistence.ChunkVectorStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
@@ -27,11 +29,13 @@ public class RagIndexingConfiguration {
             MarkdownChunker chunker,
             EmbeddingProvider embeddingProvider,
             ChunkVectorStore vectorStore,
+            ObjectProvider<DocumentMetadataRepository> metadataRepository,
             @Value("${rag.indexing.max-documents}") int maxDocuments,
             @Value("${rag.indexing.max-chunks-per-document}") int maxChunksPerDocument,
             @Value("${rag.indexing.max-characters-per-run}") long maxCharactersPerRun
     ) {
         return new RagIndexingService(documentService, chunker, embeddingProvider, vectorStore,
+                metadataRepository.getIfAvailable(),
                 maxDocuments, maxChunksPerDocument, maxCharactersPerRun);
     }
 }
