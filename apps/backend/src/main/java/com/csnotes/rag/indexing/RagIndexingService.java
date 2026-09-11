@@ -2,6 +2,8 @@ package com.csnotes.rag.indexing;
 
 import com.csnotes.document.DocumentModels;
 import com.csnotes.document.DocumentService;
+import com.csnotes.document.metadata.DocumentMetadata;
+import com.csnotes.document.metadata.DocumentMetadataRepository;
 import com.csnotes.rag.chunk.ChunkSourceDocument;
 import com.csnotes.rag.chunk.DocumentChunk;
 import com.csnotes.rag.chunk.MarkdownChunker;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.UUID;
 
 /** Markdown 문서를 변경분만 임베딩해 pgvector와 동기화하는 M4.5 색인 유스케이스다. */
 public final class RagIndexingService {
@@ -26,6 +29,7 @@ public final class RagIndexingService {
     private final MarkdownChunker chunker;
     private final EmbeddingProvider embeddingProvider;
     private final ChunkVectorStore vectorStore;
+    private final DocumentMetadataRepository metadataRepository;
     private final int maxDocuments;
     private final int maxChunksPerDocument;
     private final long maxCharactersPerRun;
@@ -40,10 +44,25 @@ public final class RagIndexingService {
             int maxChunksPerDocument,
             long maxCharactersPerRun
     ) {
+        this(documentService, chunker, embeddingProvider, vectorStore, null,
+                maxDocuments, maxChunksPerDocument, maxCharactersPerRun);
+    }
+
+    public RagIndexingService(
+            DocumentService documentService,
+            MarkdownChunker chunker,
+            EmbeddingProvider embeddingProvider,
+            ChunkVectorStore vectorStore,
+            DocumentMetadataRepository metadataRepository,
+            int maxDocuments,
+            int maxChunksPerDocument,
+            long maxCharactersPerRun
+    ) {
         this.documentService = documentService;
         this.chunker = chunker;
         this.embeddingProvider = embeddingProvider;
         this.vectorStore = vectorStore;
+        this.metadataRepository = metadataRepository;
         this.maxDocuments = maxDocuments;
         this.maxChunksPerDocument = maxChunksPerDocument;
         this.maxCharactersPerRun = maxCharactersPerRun;
@@ -51,23 +70,29 @@ public final class RagIndexingService {
 
     /** dry-run을 기본 진입점으로 두고 실제 실행 전에도 동일한 비용 한도를 검증한다. */
     public RagIndexingResult synchronize(boolean dryRun) {
+        return synchronize(null, dryRun);
+    }
+
+    /** 인증 사용자는 자신의 활성 문서 메타데이터와 연결된 Chunk만 색인할 수 있다. */
+    public RagIndexingResult synchronize(UUID ownerId, boolean dryRun) {
         if (!indexing.compareAndSet(false, true)) {
             throw new IllegalStateException("RAG indexing is already running");
         }
         try {
-            return doSynchronize(dryRun);
+            return doSynchronize(ownerId, dryRun);
         } finally {
             indexing.set(false);
         }
     }
 
-    private RagIndexingResult doSynchronize(boolean dryRun) {
+    private RagIndexingResult doSynchronize(UUID ownerId, boolean dryRun) {
         List<DocumentModels.DocumentSummaryResponse> summaries = documentService.findDocuments(null, null);
         enforceLimit(summaries.size() <= maxDocuments,
                 "Document count exceeds rag.indexing.max-documents: " + summaries.size());
 
         Set<String> currentDocumentIds = new HashSet<>();
         Map<String, IndexedDocumentState> indexedDocuments = vectorStore.findIndexedDocumentStates();
+        Map<String, DocumentMetadata> metadataBySourceId = metadataBySourceId(ownerId);
         List<IndexPlan> plans = new ArrayList<>();
         List<RagIndexingDocumentResult> documentResults = new ArrayList<>();
         int chunkCount = 0;
@@ -78,6 +103,7 @@ public final class RagIndexingService {
             DocumentModels.DocumentDetailResponse detail = documentService.findDocument(summary.id())
                     .orElseThrow(() -> new IllegalStateException("Document disappeared during indexing: " + summary.id()));
             currentDocumentIds.add(detail.id());
+            UUID documentMetadataId = ownerId == null ? null : requireMetadata(metadataBySourceId, detail).id();
             List<DocumentChunk> chunks = chunker.chunk(new ChunkSourceDocument(
                     detail.id(), detail.title(), detail.path(), detail.tags(), detail.content()
             ));
@@ -107,7 +133,7 @@ public final class RagIndexingService {
             embeddingCharacters += missingCharacters;
             enforceLimit(embeddingCharacters <= maxCharactersPerRun,
                     "Embedding input exceeds rag.indexing.max-characters-per-run: " + embeddingCharacters);
-            plans.add(new IndexPlan(detail.id(), chunks, reusable, missing, action));
+            plans.add(new IndexPlan(documentMetadataId, detail.id(), chunks, reusable, missing, action));
             documentResults.add(new RagIndexingDocumentResult(
                     detail.id(), detail.title(), detail.path(), action, chunks.size(), missing.size(),
                     documentReusedCount, missingCharacters
@@ -184,7 +210,27 @@ public final class RagIndexingService {
             }
             return new EmbeddedChunk(chunk, vector);
         }).toList();
-        vectorStore.replaceDocumentChunks(plan.documentId(), embeddedChunks);
+        vectorStore.replaceDocumentChunks(plan.documentMetadataId(), plan.documentId(), embeddedChunks);
+    }
+
+    private Map<String, DocumentMetadata> metadataBySourceId(UUID ownerId) {
+        if (ownerId == null) return Map.of();
+        if (metadataRepository == null) {
+            throw new IllegalStateException("문서 메타데이터 저장소가 활성화되어 있지 않습니다.");
+        }
+        return metadataRepository.findActiveByOwnerIdIndexedBySourceId(ownerId);
+    }
+
+    private DocumentMetadata requireMetadata(
+            Map<String, DocumentMetadata> metadataBySourceId,
+            DocumentModels.DocumentDetailResponse document
+    ) {
+        DocumentMetadata metadata = metadataBySourceId.get(document.id());
+        if (metadata == null) {
+            throw new IllegalStateException(
+                    "문서 메타데이터가 없습니다. 먼저 내 문서로 동기화해 주세요: " + document.path());
+        }
+        return metadata;
     }
 
     private void enforceLimit(boolean allowed, String message) {
@@ -192,6 +238,7 @@ public final class RagIndexingService {
     }
 
     private record IndexPlan(
+            UUID documentMetadataId,
             String documentId,
             List<DocumentChunk> chunks,
             Map<String, float[]> reusable,

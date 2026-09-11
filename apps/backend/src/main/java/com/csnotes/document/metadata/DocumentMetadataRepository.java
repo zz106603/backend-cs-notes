@@ -54,6 +54,12 @@ public class DocumentMetadataRepository {
                         """, ROW_MAPPER, ownerId, filePath).stream().findFirst();
     }
 
+    public Map<String, DocumentMetadata> findActiveByOwnerIdIndexedBySourceId(UUID ownerId) {
+        return findByOwnerId(ownerId).values().stream()
+                .filter(metadata -> metadata.deletedAt() == null)
+                .collect(Collectors.toMap(DocumentMetadata::sourceDocumentId, Function.identity()));
+    }
+
     /** file_path의 유일성으로 다른 사용자가 이미 소유한 파일을 덮어쓰지 못하게 한다. */
     public boolean insert(UUID ownerId, MetadataSource source) {
         return jdbcTemplate.update("""
