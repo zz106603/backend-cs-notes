@@ -63,20 +63,29 @@ public final class RagEvaluationService {
 
     /** 동일 질문을 세 검색 방식으로 실행해 기대 문서가 실제로 몇 위에 노출되는지 비교한다. */
     public RagEvaluationRunResponse run(UUID id) {
+        return run(null, id);
+    }
+
+    public RagEvaluationRunResponse run(UUID userId, UUID id) {
         RagEvaluationCase evaluationCase = repository.findById(id)
                 .orElseThrow(() -> new RagEvaluationValidationException("평가 케이스를 찾을 수 없습니다."));
         List<RagEvaluationModeResult> modes = EVALUATION_MODES.stream()
-                .map(mode -> evaluateMode(evaluationCase, mode))
+                .map(mode -> evaluateMode(userId, evaluationCase, mode))
                 .toList();
         return new RagEvaluationRunResponse(evaluationCase, resultLimit, modes);
     }
 
-    private RagEvaluationModeResult evaluateMode(RagEvaluationCase evaluationCase, RagSearchMode mode) {
+    private RagEvaluationModeResult evaluateMode(
+            UUID userId, RagEvaluationCase evaluationCase, RagSearchMode mode
+    ) {
         boolean negativeCase = evaluationCase.expectedDocumentPaths().isEmpty();
         // 긍정 평가의 0.0은 1차 Dense 후보를 넓게 확보하기 위한 값이며, Hybrid에는 별도 Reranker 임계값이 적용된다.
         // 부정 평가는 각 검색 방식의 운영 기본값으로 불필요한 결과가 실제 노출되는지 확인한다.
-        RagSearchResponse response = searchService.search(
-                new RagSearchRequest(evaluationCase.query(), resultLimit, negativeCase ? null : 0.0, mode));
+        RagSearchRequest request = new RagSearchRequest(
+                evaluationCase.query(), resultLimit, negativeCase ? null : 0.0, mode);
+        RagSearchResponse response = userId == null
+                ? searchService.search(request)
+                : searchService.search(userId, request);
         Set<String> expected = Set.copyOf(evaluationCase.expectedDocumentPaths());
         List<String> retrievedRelevantPaths = response.results().stream()
                 .map(RagSearchHit::documentPath)

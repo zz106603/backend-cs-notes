@@ -1,7 +1,9 @@
 package com.csnotes.rag.evaluation;
 
+import com.csnotes.auth.CsNotesOidcUser;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,7 +38,10 @@ public class RagEvaluationController {
     }
 
     @PostMapping("/{id}/run")
-    public RagEvaluationRunResponse run(@PathVariable UUID id) {
+    public RagEvaluationRunResponse run(@PathVariable UUID id, Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof CsNotesOidcUser principal) {
+            return service.run(principal.userId(), id);
+        }
         return service.run(id);
     }
 

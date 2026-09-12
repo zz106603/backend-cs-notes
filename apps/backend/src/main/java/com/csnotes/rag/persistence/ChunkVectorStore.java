@@ -30,8 +30,21 @@ public interface ChunkVectorStore {
 
     List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore);
 
+    /** 인증 검색은 소유 문서와 공개 문서만 조회하며 연결되지 않은 기존 Chunk는 제외한다. */
+    default List<ChunkSearchResult> search(
+            UUID userId, EmbeddingVector query, int limit, double minimumScore
+    ) {
+        throw new UnsupportedOperationException("Authorized dense search is not supported");
+    }
+
     /** PostgreSQL FTS로 정확한 용어가 포함된 Chunk를 검색한다. */
     default List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
         throw new UnsupportedOperationException("Sparse search is not supported");
+    }
+
+    default List<ChunkSearchResult> searchSparse(
+            UUID userId, String query, int limit, double minimumScore
+    ) {
+        throw new UnsupportedOperationException("Authorized sparse search is not supported");
     }
 }

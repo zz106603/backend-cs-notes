@@ -1,6 +1,8 @@
 package com.csnotes.rag.search;
 
+import com.csnotes.auth.CsNotesOidcUser;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,7 +20,10 @@ public class RagSearchController {
 
     /** Dense는 질의 임베딩을 호출하고 Sparse는 PostgreSQL FTS만 사용한다. */
     @PostMapping("/search")
-    public RagSearchResponse search(@RequestBody RagSearchRequest request) {
+    public RagSearchResponse search(@RequestBody RagSearchRequest request, Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof CsNotesOidcUser principal) {
+            return searchService.search(principal.userId(), request);
+        }
         return searchService.search(request);
     }
 }

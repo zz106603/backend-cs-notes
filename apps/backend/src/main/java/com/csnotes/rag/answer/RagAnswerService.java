@@ -81,6 +81,11 @@ public final class RagAnswerService {
     }
 
     public RagAnswerResponse answer(RagAnswerRequest request) {
+        return answer(null, request);
+    }
+
+    /** 검색 권한과 답변 캐시를 사용자 경계에 묶어 다른 사용자의 근거가 재사용되지 않게 한다. */
+    public RagAnswerResponse answer(UUID userId, RagAnswerRequest request) {
         if (request == null || request.question() == null || request.question().isBlank()) {
             throw new RagAnswerValidationException("질문을 입력해 주세요.");
         }
@@ -99,7 +104,9 @@ public final class RagAnswerService {
         }
         UUID requestId = UUID.randomUUID();
         long requestStartedAt = System.nanoTime();
-        RagSearchResponse search = searchService.search(
+        RagSearchResponse search = userId == null ? searchService.search(
+                new RagSearchRequest(question, sourceLimit, minimumScore, RagSearchMode.HYBRID))
+                : searchService.search(userId,
                 new RagSearchRequest(question, sourceLimit, minimumScore, RagSearchMode.HYBRID));
         if (search.results().isEmpty()) {
             RagAnswerResponse response = new RagAnswerResponse(requestId, question, NO_EVIDENCE_MESSAGE,
@@ -111,7 +118,7 @@ public final class RagAnswerService {
         }
 
         ContextBundle context = buildContext(search.results());
-        String cacheKey = question + "\n" + context.hits().stream()
+        String cacheKey = (userId == null ? "local" : userId.toString()) + "\n" + question + "\n" + context.hits().stream()
                 .map(RagSearchHit::chunkId)
                 .collect(Collectors.joining("\n"));
         RagAnswerResponse cached = cached(cacheKey);

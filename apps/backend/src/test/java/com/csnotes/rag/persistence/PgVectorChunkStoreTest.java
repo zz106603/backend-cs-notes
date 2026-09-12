@@ -11,6 +11,7 @@ import org.springframework.jdbc.core.RowMapper;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -98,6 +99,48 @@ class PgVectorChunkStoreTest {
         assertThatThrownBy(() -> store.search(query, 5, 0.7))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("dimensions");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 인증_Dense_검색은_소유_또는_공개된_활성_문서만_조회한다() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
+        UUID userId = UUID.randomUUID();
+        var store = new PgVectorChunkStore(jdbcTemplate, new ObjectMapper(), 2);
+
+        store.search(userId, new EmbeddingVector("query", "test-model", new float[]{1, 0}), 5, 0.5);
+
+        var sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        var arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), arguments.capture());
+        assertThat(sql.getValue()).contains(
+                "JOIN document document ON document.id = chunk.document_metadata_id",
+                "document.deleted_at IS NULL",
+                "document.owner_id = ? OR document.visibility = 'PUBLIC'"
+        );
+        assertThat(arguments.getValue()).contains(userId);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 인증_Sparse_검색도_RRF_후보_생성_전에_문서_권한을_적용한다() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
+        UUID userId = UUID.randomUUID();
+        var store = new PgVectorChunkStore(jdbcTemplate, new ObjectMapper(), 2);
+
+        store.searchSparse(userId, "REQUIRES_NEW", 10, 0.0);
+
+        var sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        var arguments = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), arguments.capture());
+        assertThat(sql.getValue()).contains(
+                "JOIN document document ON document.id = chunk.document_metadata_id",
+                "document.deleted_at IS NULL",
+                "document.owner_id = ? OR document.visibility = 'PUBLIC'"
+        );
+        assertThat(arguments.getValue()).contains(userId);
     }
 
     @Test

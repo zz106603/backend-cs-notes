@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -154,6 +155,19 @@ class RagSearchServiceTest {
         assertThat(provider.queries).isEmpty();
     }
 
+    @Test
+    void 인증된_통합_검색은_Dense와_Sparse에_같은_사용자_UUID를_전달한다() {
+        UUID userId = UUID.randomUUID();
+        RecordingEmbeddingProvider provider = new RecordingEmbeddingProvider();
+        RecordingVectorStore store = new RecordingVectorStore();
+        RagSearchService service = service(provider, store);
+
+        service.search(userId, new RagSearchRequest("트랜잭션", 5, 0.5, RagSearchMode.HYBRID));
+
+        assertThat(store.denseUserId).isEqualTo(userId);
+        assertThat(store.sparseUserId).isEqualTo(userId);
+    }
+
     private RagSearchService service(RecordingEmbeddingProvider provider, RecordingVectorStore store) {
         return service(provider, store, RagRerankingService.disabled());
     }
@@ -196,6 +210,8 @@ class RagSearchServiceTest {
         private int denseLimit;
         private int sparseLimit;
         private double sparseMinimumScore;
+        private UUID denseUserId;
+        private UUID sparseUserId;
 
         @Override public void replaceDocumentChunks(String documentId, List<EmbeddedChunk> chunks) { }
         @Override public void deleteDocument(String documentId) { }
@@ -211,6 +227,14 @@ class RagSearchServiceTest {
         }
 
         @Override
+        public List<ChunkSearchResult> search(
+                UUID userId, EmbeddingVector query, int limit, double minimumScore
+        ) {
+            denseUserId = userId;
+            return search(query, limit, minimumScore);
+        }
+
+        @Override
         public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
             this.sparseQuery = query;
             this.limit = limit;
@@ -218,6 +242,14 @@ class RagSearchServiceTest {
             this.minimumScore = minimumScore;
             this.sparseMinimumScore = minimumScore;
             return sparseResults;
+        }
+
+        @Override
+        public List<ChunkSearchResult> searchSparse(
+                UUID userId, String query, int limit, double minimumScore
+        ) {
+            sparseUserId = userId;
+            return searchSparse(query, limit, minimumScore);
         }
     }
 
