@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /** 질의를 임베딩하고 pgvector cosine 검색 결과를 출처 메타데이터와 함께 반환한다. */
 public final class RagSearchService {
@@ -60,6 +61,11 @@ public final class RagSearchService {
     }
 
     public RagSearchResponse search(RagSearchRequest request) {
+        return search(null, request);
+    }
+
+    /** userId가 있으면 저장소 단계에서 소유 문서와 공개 문서만 검색한다. */
+    public RagSearchResponse search(UUID userId, RagSearchRequest request) {
         if (request == null || request.query() == null || request.query().isBlank()) {
             throw new RagSearchValidationException("검색어를 입력해 주세요.");
         }
@@ -81,7 +87,7 @@ public final class RagSearchService {
 
         if (mode == RagSearchMode.SPARSE) {
             List<RagSearchHit> results = toHits(
-                    vectorStore.searchSparse(query, limit, minimumScore), RagSearchMode.SPARSE);
+                    searchSparse(userId, query, limit, minimumScore), RagSearchMode.SPARSE);
             return new RagSearchResponse(query, null, mode, limit, minimumScore, false, results, false, null);
         }
 
@@ -92,11 +98,11 @@ public final class RagSearchService {
         if (mode == RagSearchMode.HYBRID) {
             // 최종 결과보다 넓은 후보군을 각각 조회해야 두 검색 결과를 합친 뒤에도 충분한 결과가 남는다.
             int candidateLimit = Math.max(limit, hybridCandidateLimit);
-            List<ChunkSearchResult> denseResults = vectorStore.search(
-                    lookup.embedding(), candidateLimit, minimumScore);
+            List<ChunkSearchResult> denseResults = searchDense(
+                    userId, lookup.embedding(), candidateLimit, minimumScore);
             // Sparse 점수는 Dense 유사도와 척도가 다르므로 Dense 최소 점수를 적용하지 않는다.
-            List<ChunkSearchResult> sparseResults = vectorStore.searchSparse(
-                    query, candidateLimit, defaultSparseMinimumScore);
+            List<ChunkSearchResult> sparseResults = searchSparse(
+                    userId, query, candidateLimit, defaultSparseMinimumScore);
             // RRF는 후보를 넓게 정리하고, Reranker가 있으면 질문과 본문을 직접 비교한 뒤 최종 limit만 남긴다.
             List<RagSearchHit> fusedCandidates = reciprocalRankFusion(
                     denseResults, sparseResults, candidateLimit);
@@ -106,9 +112,25 @@ public final class RagSearchService {
         }
 
         List<RagSearchHit> results = toHits(
-                vectorStore.search(lookup.embedding(), limit, minimumScore), RagSearchMode.DENSE);
+                searchDense(userId, lookup.embedding(), limit, minimumScore), RagSearchMode.DENSE);
         return new RagSearchResponse(query, embeddingProvider.modelName(), mode, limit, minimumScore,
                 lookup.cached(), results, false, null);
+    }
+
+    private List<ChunkSearchResult> searchDense(
+            UUID userId, EmbeddingVector query, int limit, double minimumScore
+    ) {
+        return userId == null
+                ? vectorStore.search(query, limit, minimumScore)
+                : vectorStore.search(userId, query, limit, minimumScore);
+    }
+
+    private List<ChunkSearchResult> searchSparse(
+            UUID userId, String query, int limit, double minimumScore
+    ) {
+        return userId == null
+                ? vectorStore.searchSparse(query, limit, minimumScore)
+                : vectorStore.searchSparse(userId, query, limit, minimumScore);
     }
 
     private List<RagSearchHit> toHits(List<ChunkSearchResult> results, RagSearchMode mode) {

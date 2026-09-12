@@ -161,6 +161,31 @@ public class PgVectorChunkStore implements ChunkVectorStore {
                 }, vector, query.model(), vector, minimumScore, vector, limit);
     }
 
+    /** 유사도 계산 대상 자체를 권한이 있는 문서로 제한해 결과 생성 후 필터링하는 누수를 막는다. */
+    @Override
+    public List<ChunkSearchResult> search(
+            UUID userId, EmbeddingVector query, int limit, double minimumScore
+    ) {
+        if (userId == null) throw new IllegalArgumentException("User ID must not be null");
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("Search limit must be between 1 and 100");
+        validateDimensions(query);
+        String vector = toVector(query.values());
+        return jdbcTemplate.query("""
+                SELECT chunk.id, chunk.document_id, chunk.document_title, chunk.document_path,
+                       chunk.tags, chunk.section_path, chunk.sequence, chunk.content, chunk.content_hash,
+                       1 - (chunk.embedding <=> CAST(? AS vector)) AS score
+                  FROM document_chunk chunk
+                  JOIN document document ON document.id = chunk.document_metadata_id
+                 WHERE chunk.embedding_model = ?
+                   AND document.deleted_at IS NULL
+                   AND (document.owner_id = ? OR document.visibility = 'PUBLIC')
+                   AND 1 - (chunk.embedding <=> CAST(? AS vector)) >= ?
+                 ORDER BY chunk.embedding <=> CAST(? AS vector)
+                 LIMIT ?
+                """, (resultSet, rowNumber) -> toSearchResult(resultSet),
+                vector, query.model(), userId, vector, minimumScore, vector, limit);
+    }
+
     /** 엄격한 전체 일치를 우선하되 일부 핵심어만 일치하는 자연어 질문도 후보에서 복구한다. */
     @Override
     public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) {
@@ -209,6 +234,60 @@ public class PgVectorChunkStore implements ChunkVectorStore {
                     );
                     return new ChunkSearchResult(chunk, resultSet.getDouble("score"));
                 }, normalizedQuery, technicalTerms, normalizedQuery, minimumScore, limit);
+    }
+
+    /** PostgreSQL FTS 후보도 RRF에 들어가기 전에 동일한 문서 권한으로 제한한다. */
+    @Override
+    public List<ChunkSearchResult> searchSparse(
+            UUID userId, String query, int limit, double minimumScore
+    ) {
+        if (userId == null) throw new IllegalArgumentException("User ID must not be null");
+        if (query == null || query.isBlank()) throw new IllegalArgumentException("Search query must not be blank");
+        if (limit < 1 || limit > 100) throw new IllegalArgumentException("Search limit must be between 1 and 100");
+        String normalizedQuery = normalizeSparseQuery(query);
+        String technicalTerms = extractTechnicalTerms(normalizedQuery);
+        return jdbcTemplate.query("""
+                WITH query_value AS (
+                    SELECT websearch_to_tsquery('simple', ?) AS strict_query,
+                           websearch_to_tsquery('simple', ?) AS technical_query,
+                           to_tsquery('simple', array_to_string(
+                               tsvector_to_array(to_tsvector('simple', ?)), ' | '
+                           )) AS relaxed_query
+                ), ranked AS (
+                    SELECT chunk.*,
+                           ts_rank_cd(chunk.search_vector, query_value.strict_query) * 3
+                               + ts_rank_cd(chunk.search_vector, query_value.technical_query) * 4
+                               + ts_rank_cd(chunk.search_vector, query_value.relaxed_query) AS raw_score,
+                           chunk.search_vector @@ query_value.strict_query AS strict_match,
+                           chunk.search_vector @@ query_value.technical_query AS technical_match
+                      FROM document_chunk chunk
+                      JOIN document document ON document.id = chunk.document_metadata_id
+                      CROSS JOIN query_value
+                     WHERE document.deleted_at IS NULL
+                       AND (document.owner_id = ? OR document.visibility = 'PUBLIC')
+                       AND (chunk.search_vector @@ query_value.strict_query
+                         OR chunk.search_vector @@ query_value.technical_query
+                         OR chunk.search_vector @@ query_value.relaxed_query)
+                )
+                SELECT id, document_id, document_title, document_path, tags, section_path,
+                       sequence, content, content_hash, raw_score / (raw_score + 1.0) AS score
+                  FROM ranked
+                 WHERE raw_score / (raw_score + 1.0) >= ?
+                 ORDER BY strict_match DESC, technical_match DESC, raw_score DESC, document_id, sequence
+                 LIMIT ?
+                """, (resultSet, rowNumber) -> toSearchResult(resultSet),
+                normalizedQuery, technicalTerms, normalizedQuery, userId, minimumScore, limit);
+    }
+
+    private ChunkSearchResult toSearchResult(java.sql.ResultSet resultSet) throws java.sql.SQLException {
+        DocumentChunk chunk = new DocumentChunk(
+                resultSet.getString("id"), resultSet.getString("document_id"),
+                resultSet.getString("document_title"), resultSet.getString("document_path"),
+                fromJson(resultSet.getString("tags")), fromJson(resultSet.getString("section_path")),
+                resultSet.getInt("sequence"), resultSet.getString("content"),
+                resultSet.getString("content_hash")
+        );
+        return new ChunkSearchResult(chunk, resultSet.getDouble("score"));
     }
 
     /** REQUIRES_NEW는, SIGTERM과 같이 기술 식별자에 붙은 한국어 조사를 별도 검색어로 분리한다. */

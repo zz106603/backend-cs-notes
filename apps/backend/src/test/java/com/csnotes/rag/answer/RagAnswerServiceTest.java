@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -104,6 +105,20 @@ class RagAnswerServiceTest {
 
         assertThat(generator.contexts).hasSize(1);
         assertThat(second.cached()).isTrue();
+    }
+
+    @Test
+    void 같은_질문이어도_다른_사용자의_RAG_답변_캐시는_공유하지_않는다() {
+        RecordingAnswerGenerator generator = new RecordingAnswerGenerator();
+        RagAnswerService service = service(generator,
+                new RecordingVectorStore(List.of(result("사용자별 캐시 본문", 0.7))), 2_000);
+        RagAnswerRequest request = new RagAnswerRequest("같은 질문", null, null);
+
+        service.answer(UUID.randomUUID(), request);
+        RagAnswerResponse otherUserResponse = service.answer(UUID.randomUUID(), request);
+
+        assertThat(generator.contexts).hasSize(2);
+        assertThat(otherUserResponse.cached()).isFalse();
     }
 
     @Test
@@ -230,7 +245,9 @@ class RagAnswerServiceTest {
         @Override public Map<String, float[]> findReusableEmbeddings(String modelName, Set<String> contentHashes) { return Map.of(); }
         @Override public Set<String> findIndexedDocumentIds() { return Set.of(); }
         @Override public List<ChunkSearchResult> search(EmbeddingVector query, int limit, double minimumScore) { return results; }
+        @Override public List<ChunkSearchResult> search(UUID userId, EmbeddingVector query, int limit, double minimumScore) { return results; }
         @Override public List<ChunkSearchResult> searchSparse(String query, int limit, double minimumScore) { return results; }
+        @Override public List<ChunkSearchResult> searchSparse(UUID userId, String query, int limit, double minimumScore) { return results; }
     }
 
     private static final class RecordingUsageStore implements RagAnswerUsageStore {

@@ -1,8 +1,10 @@
 package com.csnotes.rag.answer;
 
+import com.csnotes.auth.CsNotesOidcUser;
 import com.csnotes.rag.embedding.OpenAiApiKeyCondition;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Conditional;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +23,10 @@ public class RagAnswerController {
 
     /** 검색과 답변 생성이라는 유료 호출은 명시적인 POST 요청에서만 수행한다. */
     @PostMapping("/answer")
-    public RagAnswerResponse answer(@RequestBody RagAnswerRequest request) {
+    public RagAnswerResponse answer(@RequestBody RagAnswerRequest request, Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof CsNotesOidcUser principal) {
+            return answerService.answer(principal.userId(), request);
+        }
         return answerService.answer(request);
     }
 }
