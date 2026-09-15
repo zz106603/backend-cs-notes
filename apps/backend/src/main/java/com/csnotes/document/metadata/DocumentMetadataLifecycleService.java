@@ -51,6 +51,11 @@ public class DocumentMetadataLifecycleService {
         repository.markDeletedByOwnerAndPath(ownerId, filePath, Instant.now());
     }
 
+    @Transactional("ragTransactionManager")
+    public void permanentlyDelete(UUID ownerId, String sourceDocumentId) {
+        repository.deleteByOwnerAndSourceDocumentId(ownerId, sourceDocumentId);
+    }
+
     private DocumentMetadataRepository.MetadataSource sourceOf(DocumentModels.DocumentDetailResponse document) {
         return new DocumentMetadataRepository.MetadataSource(
                 document.id(), document.path(), document.title(), DocumentContentHasher.sha256(document.content()));
