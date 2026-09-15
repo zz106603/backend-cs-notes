@@ -13,6 +13,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class DocumentAccessServiceTest {
@@ -69,6 +70,30 @@ class DocumentAccessServiceTest {
     }
 
     @Test
+    void 상세_문서에_공개_범위와_소유_여부를_결합한다() {
+        var detail = detail("public");
+        when(repository.findReadableBySourceDocumentId(userId, "public")).thenReturn(java.util.Optional.of(
+                new DocumentMetadata(UUID.randomUUID(), UUID.randomUUID(), "public", "백엔드/공개.md", "public",
+                        DocumentVisibility.PUBLIC, "hash", Instant.EPOCH, Instant.EPOCH, null)
+        ));
+
+        DocumentModels.DocumentDetailResponse result = service.attachAccess(userId, detail);
+
+        assertThat(result.visibility()).isEqualTo(DocumentVisibility.PUBLIC);
+        assertThat(result.owned()).isFalse();
+    }
+
+    @Test
+    void 소유자는_문서_공개_범위를_변경할_수_있다() {
+        DocumentModels.DocumentDetailResponse result = service.updateVisibility(
+                userId, detail("mine"), DocumentVisibility.PUBLIC);
+
+        verify(repository).updateVisibility(userId, "mine", DocumentVisibility.PUBLIC);
+        assertThat(result.visibility()).isEqualTo(DocumentVisibility.PUBLIC);
+        assertThat(result.owned()).isTrue();
+    }
+
+    @Test
     void 다른_사용자의_문서가_포함된_폴더는_이동할_수_없다() {
         when(documentService.findDocuments("백엔드", null)).thenReturn(List.of(
                 summary("mine", "백엔드", "백엔드/내 문서.md"),
@@ -82,5 +107,10 @@ class DocumentAccessServiceTest {
 
     private DocumentModels.DocumentSummaryResponse summary(String id, String category, String path) {
         return new DocumentModels.DocumentSummaryResponse(id, id, category, path, Instant.EPOCH);
+    }
+
+    private DocumentModels.DocumentDetailResponse detail(String id) {
+        return new DocumentModels.DocumentDetailResponse(
+                id, id, "백엔드", "백엔드/" + id + ".md", "# " + id, Instant.EPOCH);
     }
 }

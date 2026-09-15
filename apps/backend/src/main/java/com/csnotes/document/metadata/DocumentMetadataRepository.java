@@ -85,6 +85,16 @@ public class DocumentMetadataRepository {
                 """, Boolean.class, sourceDocumentId, userId));
     }
 
+    public Optional<DocumentMetadata> findReadableBySourceDocumentId(UUID userId, String sourceDocumentId) {
+        return jdbcTemplate.query("""
+                SELECT id, owner_id, source_document_id, file_path, title, visibility,
+                       content_hash, created_at, updated_at, deleted_at
+                  FROM document
+                 WHERE source_document_id = ? AND deleted_at IS NULL
+                   AND (owner_id = ? OR visibility = 'PUBLIC')
+                """, ROW_MAPPER, sourceDocumentId, userId).stream().findFirst();
+    }
+
     public boolean isOwner(UUID userId, String sourceDocumentId, boolean deleted) {
         String deletedCondition = deleted ? "deleted_at IS NOT NULL" : "deleted_at IS NULL";
         return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
@@ -96,6 +106,14 @@ public class DocumentMetadataRepository {
     public void deleteByOwnerAndSourceDocumentId(UUID ownerId, String sourceDocumentId) {
         jdbcTemplate.update("DELETE FROM document WHERE owner_id = ? AND source_document_id = ?",
                 ownerId, sourceDocumentId);
+    }
+
+    public void updateVisibility(UUID ownerId, String sourceDocumentId, DocumentVisibility visibility) {
+        jdbcTemplate.update("""
+                UPDATE document
+                   SET visibility = ?, updated_at = CURRENT_TIMESTAMP
+                 WHERE owner_id = ? AND source_document_id = ? AND deleted_at IS NULL
+                """, visibility.name(), ownerId, sourceDocumentId);
     }
 
     /** file_path의 유일성으로 다른 사용자가 이미 소유한 파일을 덮어쓰지 못하게 한다. */

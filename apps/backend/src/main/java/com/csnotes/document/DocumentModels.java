@@ -1,5 +1,6 @@
 package com.csnotes.document;
 
+import com.csnotes.document.metadata.DocumentVisibility;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -52,13 +53,25 @@ public final class DocumentModels {
             String path,
             String content,
             Instant updatedAt,
-            List<String> tags
+            List<String> tags,
+            DocumentVisibility visibility,
+            Boolean owned
     ) {
+        public DocumentDetailResponse(
+                String id, String title, String category, String path, String content, Instant updatedAt,
+                List<String> tags
+        ) {
+            this(id, title, category, path, content, updatedAt, tags, null, null);
+        }
+
         public DocumentDetailResponse(
                 String id, String title, String category, String path, String content, Instant updatedAt
         ) {
-            this(id, title, category, path, content, updatedAt, List.of());
+            this(id, title, category, path, content, updatedAt, List.of(), null, null);
         }
+    }
+
+    public record UpdateDocumentVisibilityRequest(@NotNull DocumentVisibility visibility) {
     }
 
     public record CreateDocumentRequest(
