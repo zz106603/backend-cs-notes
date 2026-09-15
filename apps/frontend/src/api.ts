@@ -70,6 +70,10 @@ export const api = {
     `/api/documents/${encodeURIComponent(id)}`,
     { method: 'PUT', body: JSON.stringify(input) },
   ),
+  updateDocumentVisibility: (id: string, visibility: 'PRIVATE' | 'PUBLIC') => request<DocumentDetail>(
+    `/api/documents/${encodeURIComponent(id)}/visibility`,
+    { method: 'PUT', body: JSON.stringify({ visibility }) },
+  ),
   moveDocument: (id: string, category: string, expectedUpdatedAt: string) => request<DocumentDetail>(
     `/api/documents/${encodeURIComponent(id)}/move`,
     { method: 'POST', body: JSON.stringify({ category, expectedUpdatedAt }) },

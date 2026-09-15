@@ -1,9 +1,9 @@
 package com.csnotes.document;
 
 import com.csnotes.auth.CsNotesOidcUser;
+import com.csnotes.document.metadata.DocumentAccessService;
 import com.csnotes.document.metadata.DocumentMetadataLifecycleService;
 import com.csnotes.document.metadata.DocumentMetadataSyncService;
-import com.csnotes.document.metadata.DocumentAccessService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.ObjectProvider;
@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
@@ -94,11 +95,27 @@ public class DocumentController {
             @PathVariable @NotBlank String id,
             Authentication authentication
     ) {
-        currentUserId(authentication).ifPresent(userId ->
-                documentAccessService.getObject().requireReadable(userId, id));
+        Optional<UUID> userId = currentUserId(authentication);
+        userId.ifPresent(ownerId -> documentAccessService.getObject().requireReadable(ownerId, id));
         return documentService.findDocument(id)
+                .map(document -> userId.map(ownerId -> documentAccessService.getObject()
+                        .attachAccess(ownerId, document)).orElse(document))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/documents/{id}/visibility")
+    public DocumentModels.DocumentDetailResponse updateDocumentVisibility(
+            @PathVariable @NotBlank String id,
+            @Valid @RequestBody DocumentModels.UpdateDocumentVisibilityRequest request,
+            Authentication authentication
+    ) {
+        UUID userId = currentUserId(authentication)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."));
+        documentAccessService.getObject().requireOwner(userId, id);
+        DocumentModels.DocumentDetailResponse document = documentService.findDocument(id)
+                .orElseThrow(() -> new DocumentNotFoundException("문서를 찾을 수 없습니다."));
+        return documentAccessService.getObject().updateVisibility(userId, document, request.visibility());
     }
 
     @PostMapping("/documents")
@@ -107,9 +124,13 @@ public class DocumentController {
             Authentication authentication
     ) {
         DocumentModels.DocumentDetailResponse response = documentService.createDocument(request);
-        currentUserId(authentication).ifPresent(userId ->
-                metadataLifecycleService.ifAvailable(service -> service.registerOrRestore(userId, response)));
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        Optional<UUID> userId = currentUserId(authentication);
+        userId.ifPresent(ownerId ->
+                metadataLifecycleService.ifAvailable(service -> service.registerOrRestore(ownerId, response)));
+        DocumentModels.DocumentDetailResponse accessibleResponse = userId
+                .map(ownerId -> documentAccessService.getObject().attachAccess(ownerId, response))
+                .orElse(response);
+        return ResponseEntity.status(HttpStatus.CREATED).body(accessibleResponse);
     }
 
     @PutMapping("/documents/{id}")
@@ -125,7 +146,7 @@ public class DocumentController {
         DocumentModels.DocumentDetailResponse response = documentService.updateDocument(id, request);
         userId.ifPresent(ownerId -> metadataLifecycleService.ifAvailable(
                 service -> service.update(ownerId, previousPath, response)));
-        return response;
+        return attachAccessIfAuthenticated(userId, response);
     }
 
     @PostMapping("/documents/{id}/move")
@@ -141,7 +162,7 @@ public class DocumentController {
         DocumentModels.DocumentDetailResponse response = documentService.moveDocument(id, request);
         userId.ifPresent(ownerId -> metadataLifecycleService.ifAvailable(
                 service -> service.update(ownerId, previousPath, response)));
-        return response;
+        return attachAccessIfAuthenticated(userId, response);
     }
 
     @DeleteMapping("/documents/{id}")
@@ -186,12 +207,12 @@ public class DocumentController {
             @PathVariable @NotBlank String id,
             Authentication authentication
     ) {
-        currentUserId(authentication).ifPresent(userId ->
-                documentAccessService.getObject().requireDeletedOwner(userId, id));
+        Optional<UUID> userId = currentUserId(authentication);
+        userId.ifPresent(ownerId -> documentAccessService.getObject().requireDeletedOwner(ownerId, id));
         DocumentModels.DocumentDetailResponse response = documentService.restoreTrashDocument(id);
-        currentUserId(authentication).ifPresent(userId ->
-                metadataLifecycleService.ifAvailable(service -> service.registerOrRestore(userId, response)));
-        return response;
+        userId.ifPresent(ownerId ->
+                metadataLifecycleService.ifAvailable(service -> service.registerOrRestore(ownerId, response)));
+        return attachAccessIfAuthenticated(userId, response);
     }
 
     private Optional<UUID> currentUserId(Authentication authentication) {
@@ -199,6 +220,13 @@ public class DocumentController {
             return Optional.of(principal.userId());
         }
         return Optional.empty();
+    }
+
+    private DocumentModels.DocumentDetailResponse attachAccessIfAuthenticated(
+            Optional<UUID> userId, DocumentModels.DocumentDetailResponse document
+    ) {
+        return userId.map(ownerId -> documentAccessService.getObject().attachAccess(ownerId, document))
+                .orElse(document);
     }
 
     /** 인증 모드에서만 변경 전 경로를 읽어 문서 UUID가 이동 뒤에도 유지되게 한다. */

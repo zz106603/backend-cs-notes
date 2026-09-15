@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, BookOpenText, CalendarDays, FileInput, FileText, FolderOpen, Pencil, Trash2, Type, X } from 'lucide-react'
+import { ArrowLeft, BookOpenText, CalendarDays, Eye, FileInput, FileText, FolderOpen, LockKeyhole, Pencil, Trash2, Type, X } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
@@ -132,6 +132,17 @@ export function DocumentPage() {
       navigate(`/notes/${movedDocument.id}`, { replace: true })
     },
   })
+  const visibilityMutation = useMutation({
+    mutationFn: (visibility: 'PRIVATE' | 'PUBLIC') => api.updateDocumentVisibility(documentId, visibility),
+    onSuccess: async (updatedDocument) => {
+      queryClient.setQueryData(['document', documentId], updatedDocument)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['documents'] }),
+        queryClient.invalidateQueries({ queryKey: ['categories'] }),
+        queryClient.invalidateQueries({ queryKey: ['rag'] }),
+      ])
+    },
+  })
 
   if (isLoading) return <div className="page page--document"><LoadingState /></div>
   if (error) return <div className="page page--document"><ErrorState message={(error as Error).message} /></div>
@@ -156,24 +167,39 @@ export function DocumentPage() {
           <ArrowLeft size={16} /> {document.category} 목록으로
         </Link>
         <div>
-          <Link to={`/notes/${document.id}/edit`} className="secondary-button"><Pencil size={15} /> 편집</Link>
-          <button type="button" className="secondary-button" onClick={() => {
-            setMoveCategory(document.category)
-            setMoveOpen(true)
-          }}><FileInput size={15} /> 이동</button>
-          <button
-            type="button"
-            className="secondary-button secondary-button--danger"
-            disabled={trashMutation.isPending}
-            onClick={() => {
-              if (window.confirm('이 문서를 휴지통으로 이동할까요?')) trashMutation.mutate()
-            }}
-          >
-            <Trash2 size={15} /> {trashMutation.isPending ? '이동 중...' : '휴지통'}
-          </button>
+          {document.owned && document.visibility && (
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={visibilityMutation.isPending}
+              title={document.visibility === 'PRIVATE' ? '문서를 공개해 다른 사용자도 조회할 수 있게 합니다.' : '소유자만 조회할 수 있게 변경합니다.'}
+              onClick={() => visibilityMutation.mutate(document.visibility === 'PRIVATE' ? 'PUBLIC' : 'PRIVATE')}
+            >
+              {document.visibility === 'PRIVATE' ? <LockKeyhole size={15} /> : <Eye size={15} />}
+              {visibilityMutation.isPending ? '변경 중...' : document.visibility === 'PRIVATE' ? '비공개' : '공개'}
+            </button>
+          )}
+          {document.owned !== false && <>
+            <Link to={`/notes/${document.id}/edit`} className="secondary-button"><Pencil size={15} /> 편집</Link>
+            <button type="button" className="secondary-button" onClick={() => {
+              setMoveCategory(document.category)
+              setMoveOpen(true)
+            }}><FileInput size={15} /> 이동</button>
+            <button
+              type="button"
+              className="secondary-button secondary-button--danger"
+              disabled={trashMutation.isPending}
+              onClick={() => {
+                if (window.confirm('이 문서를 휴지통으로 이동할까요?')) trashMutation.mutate()
+              }}
+            >
+              <Trash2 size={15} /> {trashMutation.isPending ? '이동 중...' : '휴지통'}
+            </button>
+          </>}
         </div>
       </div>
 
+      {visibilityMutation.error && <div className="editor-error" role="alert">{(visibilityMutation.error as Error).message}</div>}
       {trashMutation.error && <div className="editor-error" role="alert">{(trashMutation.error as Error).message}</div>}
       {moveMutation.error && <div className="editor-error" role="alert">{(moveMutation.error as Error).message}</div>}
 

@@ -17,6 +17,8 @@ export interface DocumentSummary {
 
 export interface DocumentDetail extends DocumentSummary {
   content: string
+  visibility: 'PRIVATE' | 'PUBLIC' | null
+  owned: boolean | null
 }
 
 export interface CreateDocumentInput {

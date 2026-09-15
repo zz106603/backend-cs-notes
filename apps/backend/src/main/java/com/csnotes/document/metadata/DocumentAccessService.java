@@ -47,6 +47,26 @@ public class DocumentAccessService {
         if (!repository.canRead(userId, documentId)) notFound();
     }
 
+    /** 파일에서 읽은 본문에 DB의 공개 범위와 현재 사용자의 소유 여부를 결합한다. */
+    public DocumentModels.DocumentDetailResponse attachAccess(
+            UUID userId, DocumentModels.DocumentDetailResponse document
+    ) {
+        DocumentMetadata metadata = repository.findReadableBySourceDocumentId(userId, document.id())
+                .orElseThrow(() -> new DocumentNotFoundException("문서를 찾을 수 없습니다."));
+        return new DocumentModels.DocumentDetailResponse(
+                document.id(), document.title(), document.category(), document.path(), document.content(),
+                document.updatedAt(), document.tags(), metadata.visibility(), metadata.ownerId().equals(userId));
+    }
+
+    public DocumentModels.DocumentDetailResponse updateVisibility(
+            UUID userId, DocumentModels.DocumentDetailResponse document, DocumentVisibility visibility
+    ) {
+        repository.updateVisibility(userId, document.id(), visibility);
+        return new DocumentModels.DocumentDetailResponse(
+                document.id(), document.title(), document.category(), document.path(), document.content(),
+                document.updatedAt(), document.tags(), visibility, true);
+    }
+
     public void requireOwner(UUID userId, String documentId) {
         if (!repository.isOwner(userId, documentId, false)) notFound();
     }
