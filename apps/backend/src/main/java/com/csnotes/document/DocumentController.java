@@ -3,6 +3,7 @@ package com.csnotes.document;
 import com.csnotes.auth.CsNotesOidcUser;
 import com.csnotes.document.metadata.DocumentMetadataLifecycleService;
 import com.csnotes.document.metadata.DocumentMetadataSyncService;
+import com.csnotes.document.metadata.DocumentAccessService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.ObjectProvider;
@@ -32,19 +33,26 @@ public class DocumentController {
     private final DocumentService documentService;
     private final ObjectProvider<DocumentMetadataLifecycleService> metadataLifecycleService;
     private final ObjectProvider<DocumentMetadataSyncService> metadataSyncService;
+    private final ObjectProvider<DocumentAccessService> documentAccessService;
 
     public DocumentController(
             DocumentService documentService,
             ObjectProvider<DocumentMetadataLifecycleService> metadataLifecycleService,
-            ObjectProvider<DocumentMetadataSyncService> metadataSyncService
+            ObjectProvider<DocumentMetadataSyncService> metadataSyncService,
+            ObjectProvider<DocumentAccessService> documentAccessService
     ) {
         this.documentService = documentService;
         this.metadataLifecycleService = metadataLifecycleService;
         this.metadataSyncService = metadataSyncService;
+        this.documentAccessService = documentAccessService;
     }
 
     @GetMapping("/categories")
-    public List<DocumentModels.CategoryResponse> categories() {
+    public List<DocumentModels.CategoryResponse> categories(Authentication authentication) {
+        Optional<UUID> userId = currentUserId(authentication);
+        if (userId.isPresent()) {
+            return documentAccessService.getObject().findReadableCategories(userId.get());
+        }
         return documentService.findCategories();
     }
 
@@ -60,6 +68,8 @@ public class DocumentController {
             @Valid @RequestBody DocumentModels.UpdateCategoryRequest request,
             Authentication authentication
     ) {
+        currentUserId(authentication).ifPresent(userId ->
+                documentAccessService.getObject().requireCategoryOwner(userId, request.path()));
         DocumentModels.CategoryResponse response = documentService.updateCategory(request);
         currentUserId(authentication).ifPresent(userId ->
                 metadataSyncService.ifAvailable(service -> service.synchronize(userId)));
@@ -69,15 +79,23 @@ public class DocumentController {
     @GetMapping("/documents")
     public List<DocumentModels.DocumentSummaryResponse> documents(
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String query
+            @RequestParam(required = false) String query,
+            Authentication authentication
     ) {
+        Optional<UUID> userId = currentUserId(authentication);
+        if (userId.isPresent()) {
+            return documentAccessService.getObject().findReadableDocuments(userId.get(), category, query);
+        }
         return documentService.findDocuments(category, query);
     }
 
     @GetMapping("/documents/{id}")
     public ResponseEntity<DocumentModels.DocumentDetailResponse> document(
-            @PathVariable @NotBlank String id
+            @PathVariable @NotBlank String id,
+            Authentication authentication
     ) {
+        currentUserId(authentication).ifPresent(userId ->
+                documentAccessService.getObject().requireReadable(userId, id));
         return documentService.findDocument(id)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -100,6 +118,8 @@ public class DocumentController {
             @Valid @RequestBody DocumentModels.UpdateDocumentRequest request,
             Authentication authentication
     ) {
+        currentUserId(authentication).ifPresent(userId ->
+                documentAccessService.getObject().requireOwner(userId, id));
         Optional<UUID> userId = currentUserId(authentication);
         String previousPath = previousPathIfRequired(userId, id);
         DocumentModels.DocumentDetailResponse response = documentService.updateDocument(id, request);
@@ -114,6 +134,8 @@ public class DocumentController {
             @Valid @RequestBody DocumentModels.MoveDocumentRequest request,
             Authentication authentication
     ) {
+        currentUserId(authentication).ifPresent(userId ->
+                documentAccessService.getObject().requireOwner(userId, id));
         Optional<UUID> userId = currentUserId(authentication);
         String previousPath = previousPathIfRequired(userId, id);
         DocumentModels.DocumentDetailResponse response = documentService.moveDocument(id, request);
@@ -127,6 +149,8 @@ public class DocumentController {
             @PathVariable @NotBlank String id,
             Authentication authentication
     ) {
+        currentUserId(authentication).ifPresent(userId ->
+                documentAccessService.getObject().requireOwner(userId, id));
         Optional<UUID> userId = currentUserId(authentication);
         String previousPath = previousPathIfRequired(userId, id);
         documentService.moveDocumentToTrash(id);
@@ -136,13 +160,24 @@ public class DocumentController {
     }
 
     @GetMapping("/trash")
-    public List<DocumentModels.TrashDocumentResponse> trashDocuments() {
+    public List<DocumentModels.TrashDocumentResponse> trashDocuments(Authentication authentication) {
+        Optional<UUID> userId = currentUserId(authentication);
+        if (userId.isPresent()) {
+            return documentAccessService.getObject().findOwnedTrashDocuments(userId.get());
+        }
         return documentService.findTrashDocuments();
     }
 
     @DeleteMapping("/trash/{id}")
-    public ResponseEntity<Void> permanentlyDeleteTrashDocument(@PathVariable @NotBlank String id) {
+    public ResponseEntity<Void> permanentlyDeleteTrashDocument(
+            @PathVariable @NotBlank String id,
+            Authentication authentication
+    ) {
+        Optional<UUID> userId = currentUserId(authentication);
+        userId.ifPresent(ownerId -> documentAccessService.getObject().requireDeletedOwner(ownerId, id));
         documentService.permanentlyDeleteTrashDocument(id);
+        userId.ifPresent(ownerId -> metadataLifecycleService.ifAvailable(
+                service -> service.permanentlyDelete(ownerId, id)));
         return ResponseEntity.noContent().build();
     }
 
@@ -151,6 +186,8 @@ public class DocumentController {
             @PathVariable @NotBlank String id,
             Authentication authentication
     ) {
+        currentUserId(authentication).ifPresent(userId ->
+                documentAccessService.getObject().requireDeletedOwner(userId, id));
         DocumentModels.DocumentDetailResponse response = documentService.restoreTrashDocument(id);
         currentUserId(authentication).ifPresent(userId ->
                 metadataLifecycleService.ifAvailable(service -> service.registerOrRestore(userId, response)));

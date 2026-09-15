@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -58,6 +59,43 @@ public class DocumentMetadataRepository {
         return findByOwnerId(ownerId).values().stream()
                 .filter(metadata -> metadata.deletedAt() == null)
                 .collect(Collectors.toMap(DocumentMetadata::sourceDocumentId, Function.identity()));
+    }
+
+    public Set<String> findReadableSourceDocumentIds(UUID userId) {
+        return Set.copyOf(jdbcTemplate.queryForList("""
+                SELECT source_document_id FROM document
+                 WHERE deleted_at IS NULL
+                   AND (owner_id = ? OR visibility = 'PUBLIC')
+                """, String.class, userId));
+    }
+
+    public Set<String> findOwnedSourceDocumentIds(UUID userId, boolean deleted) {
+        String deletedCondition = deleted ? "deleted_at IS NOT NULL" : "deleted_at IS NULL";
+        return Set.copyOf(jdbcTemplate.queryForList("""
+                SELECT source_document_id FROM document
+                 WHERE owner_id = ? AND %s
+                """.formatted(deletedCondition), String.class, userId));
+    }
+
+    public boolean canRead(UUID userId, String sourceDocumentId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM document
+                 WHERE source_document_id = ? AND deleted_at IS NULL
+                   AND (owner_id = ? OR visibility = 'PUBLIC'))
+                """, Boolean.class, sourceDocumentId, userId));
+    }
+
+    public boolean isOwner(UUID userId, String sourceDocumentId, boolean deleted) {
+        String deletedCondition = deleted ? "deleted_at IS NOT NULL" : "deleted_at IS NULL";
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM document
+                 WHERE source_document_id = ? AND owner_id = ? AND %s)
+                """.formatted(deletedCondition), Boolean.class, sourceDocumentId, userId));
+    }
+
+    public void deleteByOwnerAndSourceDocumentId(UUID ownerId, String sourceDocumentId) {
+        jdbcTemplate.update("DELETE FROM document WHERE owner_id = ? AND source_document_id = ?",
+                ownerId, sourceDocumentId);
     }
 
     /** file_path의 유일성으로 다른 사용자가 이미 소유한 파일을 덮어쓰지 못하게 한다. */
