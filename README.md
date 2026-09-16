@@ -71,12 +71,15 @@ React + Vite
       │ REST API
       ▼
 Spring Boot
-      ├── 로컬 Markdown ───────── 문서 작성·조회·검색
-      ├── PostgreSQL + pgvector ─ Chunk·임베딩 저장 및 유사도 검색
-      └── OpenAI ──────────────── 임베딩 및 문서 기반 답변 생성
+      ├── 로컬 Markdown ───────────── 문서 작성·조회·청킹
+      ├── PostgreSQL + pgvector ───── Chunk·권한 메타데이터·벡터·FTS
+      ├── OpenAI ──────────────────── 임베딩 및 근거 기반 답변 생성
+      └── Cohere ──────────────────── Hybrid 검색 후보 재정렬(선택)
 ```
 
-문서는 제목 구조를 고려해 Chunk로 나뉩니다. 각 Chunk의 임베딩은 pgvector에 저장되고, 의미 검색 시 질문 벡터와의 **cosine 유사도**로 관련 내용을 찾습니다. RAG 답변은 이 검색 결과만 참고 자료로 사용합니다.
+문서는 제목 구조를 고려해 Chunk로 나뉩니다. 검색은 pgvector cosine 유사도와 PostgreSQL Full Text Search 결과를 RRF로 합치고, 선택적으로 Cohere Reranker가 후보를 재정렬합니다. 인증을 활성화하면 저장소 쿼리에서 소유 문서와 공개 문서만 조회합니다. RAG 답변은 임계값을 통과한 검색 결과만 참고 자료로 사용하며 출처를 함께 반환합니다.
+
+구현 경계와 요청 흐름은 [현재 아키텍처](apps/backend/docs/architecture.md), 기능별 환경 변수와 장애 시 동작은 [실행 및 운영 가이드](apps/backend/docs/operations.md)에서 확인할 수 있습니다. RAG의 단계별 결정은 [RAG 기반 설계 이력](apps/backend/docs/rag-foundation.md)에 남겨 두었습니다.
 
 ## 비용 방어 장치
 
@@ -97,7 +100,7 @@ Spring Boot
 | **Backend** | Java 21, Spring Boot 3, Spring AI, Gradle Kotlin DSL |
 | **Document** | Markdown, YAML front matter |
 | **RAG storage** | PostgreSQL, pgvector, Flyway |
-| **AI** | OpenAI Embedding API, OpenAI Chat API |
+| **AI** | OpenAI Embedding/Chat API, Cohere Rerank API(선택) |
 
 <details>
 <summary><strong>로컬 실행 방법 보기</strong></summary>
@@ -140,10 +143,12 @@ API 키는 저장소나 설정 파일에 기록하지 않습니다. 기본 일�
 
 ## 프로젝트 방향
 
-> **많이 보관하는 것보다, 다시 찾고 내 것으로 만드는 과정을 짧게 만듭니다.**
+> **Java/Spring 백엔드를 중심으로 생성형 AI를 실제 서비스에 연결하고 운영하는 구조를 검증합니다.**
 
 ```text
 학습 → 내 언어로 기록 → 필요한 내용 검색 → 근거와 함께 복습 → 문서 보완
 ```
 
-향후에는 학습 기록과 복습 주기, 문서 간 연결을 추가해 지속적으로 활용할 수 있는 개인 CS 학습 환경으로 발전시키는 것을 목표로 합니다.
+검색 기법을 계속 추가하기보다 현재 RAG의 경계와 운영 정책을 다듬는 데 집중합니다. 다음 단계는 Open-weight LLM 추론 서버를 별도 Python 서비스로 구성하고, Spring에서 외부 API와 자체 서빙 모델을 교체할 수 있는 LLM Provider 경계를 만드는 것입니다. 이후 기존 RAG 또는 MCP와 연결한 작은 Tool Calling 기능과 Docker/Kubernetes 실행 환경으로 확장합니다.
+
+모델 학습, Fine-tuning, PyTorch/CUDA 연구는 현재 범위에 포함하지 않습니다. Python은 추론 서버에 한정하고 서비스 흐름, 장애 대응, 권한, 비용과 관측성은 Spring 애플리케이션이 책임지는 방향을 유지합니다.
