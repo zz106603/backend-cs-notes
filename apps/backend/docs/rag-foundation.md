@@ -1,4 +1,6 @@
-# RAG 기반 설계 결정
+# RAG 기반 설계 이력
+
+> 이 문서는 RAG를 단계적으로 구현하며 내린 결정과 당시의 다음 단계를 기록한다. 현재 컴포넌트와 요청 흐름은 [현재 아키텍처](architecture.md), 실제 실행 설정과 장애 대응은 [실행 및 운영 가이드](operations.md)를 기준으로 확인한다.
 
 ## 현재 결정
 
@@ -140,6 +142,6 @@ cosine 유사도는 이론적으로 -1~1 범위이며 1에 가까울수록 방�
 
 ## 다음 단계
 
-문서 작성·수정·휴지통 이벤트를 Chunk 생성과 임베딩 동기화에 연결한다. 이후 동일한 질의 집합으로 한국어 검색 품질, 비용, 응답 시간을 기록한다.
+이 절은 M4.10 완료 시점에 작성한 후속 계획이다. 이후 Hybrid Search, Cohere Reranker, 검색 품질 평가와 사용자 권한 필터링이 구현되었으며 최신 로드맵은 [현재 아키텍처](architecture.md#다음-아키텍처-단계)를 따른다.
 
 Reranker의 모델 선택, Trial Key 제한, 장애 fallback, 평가 및 Python Cross-Encoder 비교 결정은 [Cohere Reranker 도입 정책](cohere-reranker-policy.md)에 별도로 기록한다.
